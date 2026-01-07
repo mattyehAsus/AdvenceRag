@@ -33,12 +33,35 @@ def search_knowledge_base(
     # Import here to avoid circular dependencies if any, 
     # though tools is a lower layer so it should be fine.
     from advence_rag.tools.knowledge_base import search_similar
+    from advence_rag.tools.rerank import rerank_results
     
-    # Call the actual tool implementation
-    return search_similar(
+    # 1. First Pass: Vector Search (Retrieve more candidates for reranking)
+    # We retrieve 2x or 3x top_k to let reranker select the best
+    initial_results = search_similar(
         query=query,
+        top_k=top_k * 3,
+    )
+    
+    if initial_results["status"] != "success" or not initial_results["results"]:
+        return initial_results
+
+    # 2. Second Pass: Cross-Encoder Reranking
+    reranked = rerank_results(
+        query=query,
+        documents=initial_results["results"],
         top_k=top_k,
     )
+    
+    if reranked["status"] == "success":
+        return {
+            "status": "success",
+            "query": query,
+            "results": reranked["results"],
+            "total_found": initial_results["total_found"],
+            "reranked": True
+        }
+    
+    return initial_results
 
 
 def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
@@ -51,13 +74,9 @@ def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
     Returns:
         dict: 搜索結果
     """
-    # 此工具會整合 Google Search API
-    return {
-        "status": "success",
-        "query": query,
-        "results": [],  # 由 Google Search 填充
-        "source": "web_search",
-    }
+    from advence_rag.tools.web_search import search_google
+    
+    return search_google(query, num_results)
 
 
 def evaluate_retrieval_quality(
@@ -81,11 +100,25 @@ def evaluate_retrieval_quality(
             "reason": "No results found in knowledge base",
         }
     
-    # 基本品質評估邏輯
-    # 實際實作可使用 LLM 或 cross-encoder 評分
+    # Check top-1 score
+    # Cross-Encoder scores are usually logits. 
+    # > 0 usually implies relevant for models trained with BCE (like ms-marco).
+    top_score = results[0].get("rerank_score", -999.0)
+    
+    # Threshold can be tuned. 0.0 is a reasonable starting point for relevant/non-relevant.
+    threshold = 0.0 
+    
+    if top_score < threshold:
+         return {
+            "quality": "poor",
+            "score": top_score,
+            "needs_web_search": True,
+            "reason": f"Top result score ({top_score:.2f}) below threshold ({threshold})",
+        }
+
     return {
         "quality": "good",
-        "score": 0.8,
+        "score": top_score,
         "needs_web_search": False,
         "reason": "Sufficient results from knowledge base",
     }

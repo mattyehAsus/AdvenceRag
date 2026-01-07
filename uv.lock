@@ -41,6 +41,7 @@ source = { editable = "." }
 dependencies = [
     { name = "google-adk" },
     { name = "google-genai" },
+    { name = "hf-xet" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
@@ -94,6 +95,7 @@ requires-dist = [
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0.0" },
     { name = "google-adk", specifier = ">=0.3.0" },
     { name = "google-genai", specifier = ">=1.0.0" },
+    { name = "hf-xet", specifier = ">=1.2.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
