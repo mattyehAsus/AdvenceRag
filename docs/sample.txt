@@ -1,0 +1,15 @@
+Advence RAG 是一個基於 Google ADK 的多代理 RAG 系統。
+
+核心架構包含：
+1. Orchestrator Agent: 負責智慧路由與協調。
+2. Guard Agent: 負責過濾敏感或惡意內容。
+3. Retrieval Team: 負責檢索相關文件。
+4. Processing Team: 負責生成回答。
+5. Optimization Team: 負責後台文件的處理與向量化。
+
+安裝方式：
+使用 pip install -e ".[full]" 進行安裝。
+
+啟動方式：
+使用 adk web src/advence_rag 啟動伺服器。
+或是使用 advence-rag ingest <path> 指令來匯入文件。

@@ -1,0 +1,4 @@
+
+This is a sample document for testing the RAG system.
+It contains some information about Advence RAG.
+Advence RAG is a multi-agent system.
