@@ -30,25 +30,47 @@ def search_knowledge_base(
     if top_k is None:
         top_k = settings.retrieval_top_k
     
-    # Import here to avoid circular dependencies if any, 
-    # though tools is a lower layer so it should be fine.
-    from advence_rag.tools.knowledge_base import search_similar
+    from advence_rag.tools.knowledge_base import search_similar, search_keyword
     from advence_rag.tools.rerank import rerank_results
     
-    # 1. First Pass: Vector Search (Retrieve more candidates for reranking)
-    # We retrieve 2x or 3x top_k to let reranker select the best
-    initial_results = search_similar(
+    # 1. First Pass: Hybrid Search
+    # 1a. Vector Search
+    vector_results = search_similar(
         query=query,
         top_k=top_k * 3,
     )
     
-    if initial_results["status"] != "success" or not initial_results["results"]:
-        return initial_results
+    # 1b. Keyword Search (BM25)
+    keyword_results = search_keyword(
+        query=query,
+        top_k=top_k * 3,
+    )
+    
+    # 2. Merge and Deduplicate Results
+    seen_ids = set()
+    merged_results = []
+    
+    # Prioritize keyword results for exact matches if needed, or just combine
+    all_raw_results = []
+    if vector_results["status"] == "success":
+        all_raw_results.extend(vector_results["results"])
+    if keyword_results["status"] == "success":
+        all_raw_results.extend(keyword_results["results"])
+        
+    for res in all_raw_results:
+        res_id = res.get("id")
+        if res_id not in seen_ids:
+            seen_ids.add(res_id)
+            merged_results.append(res)
+    
+    if not merged_results:
+        return {"status": "success", "results": [], "total_found": 0}
 
-    # 2. Second Pass: Cross-Encoder Reranking
+    # 3. Second Pass: Cross-Encoder Reranking
+    # The reranker will handle the actual fusion by scoring relevance of query vs content
     reranked = rerank_results(
         query=query,
-        documents=initial_results["results"],
+        documents=merged_results,
         top_k=top_k,
     )
     
@@ -57,11 +79,12 @@ def search_knowledge_base(
             "status": "success",
             "query": query,
             "results": reranked["results"],
-            "total_found": initial_results["total_found"],
-            "reranked": True
+            "total_found": len(merged_results),
+            "reranked": True,
+            "search_type": "hybrid"
         }
     
-    return initial_results
+    return {"status": "success", "results": merged_results[:top_k], "total_found": len(merged_results)}
 
 
 def search_web(query: str, num_results: int = 5) -> dict[str, Any]:

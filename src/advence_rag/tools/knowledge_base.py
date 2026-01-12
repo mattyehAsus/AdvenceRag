@@ -1,17 +1,111 @@
-"""Knowledge Base Tool - Chroma 向量資料庫操作。
-
-提供知識庫的新增、檢索、刪除等操作。
-"""
-
+import logging
+import pickle
+from pathlib import Path
 from typing import Any
 
 from advence_rag.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Chroma client will be lazily initialized
+# Global state for lazy initialization
 _chroma_client = None
 _collection = None
+_bm25_index = None
+
+
+class BM25Index:
+    """Simple wrapper for rank_bm25 with persistence."""
+    
+    def __init__(self, persist_path: Path):
+        self.persist_path = persist_path
+        self.corpus: list[str] = []
+        self.doc_ids: list[str] = []
+        self.bm25 = None
+        self._load()
+
+    def _load(self):
+        if self.persist_path.exists():
+            try:
+                with open(self.persist_path, "rb") as f:
+                    data = pickle.load(f)
+                    self.corpus = data.get("corpus", [])
+                    self.doc_ids = data.get("doc_ids", [])
+                    self._rebuild_model()
+            except Exception as e:
+                logger.error(f"Failed to load BM25 index: {e}")
+
+    def _save(self):
+        try:
+            self.persist_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.persist_path, "wb") as f:
+                pickle.dump({
+                    "corpus": self.corpus,
+                    "doc_ids": self.doc_ids
+                }, f)
+        except Exception as e:
+            logger.error(f"Failed to save BM25 index: {e}")
+
+    def _rebuild_model(self):
+        if not self.corpus:
+            self.bm25 = None
+            return
+        
+        from rank_bm25 import BM25Okapi
+        # Simple tokenization: lower case and split. 
+        # Future: Use tiktoken or specialized tokenizer.
+        tokenized_corpus = [doc.lower().split() for doc in self.corpus]
+        self.bm25 = BM25Okapi(tokenized_corpus)
+
+    def add(self, documents: list[str], ids: list[str]):
+        self.corpus.extend(documents)
+        self.doc_ids.extend(ids)
+        self._rebuild_model()
+        self._save()
+
+    def delete(self, ids: list[str]):
+        ids_set = set(ids)
+        new_corpus = []
+        new_ids = []
+        for doc, d_id in zip(self.corpus, self.doc_ids):
+            if d_id not in ids_set:
+                new_corpus.append(doc)
+                new_ids.append(d_id)
+        
+        self.corpus = new_corpus
+        self.doc_ids = new_ids
+        self._rebuild_model()
+        self._save()
+
+    def search(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+        if not self.bm25:
+            return []
+        
+        tokenized_query = query.lower().split()
+        scores = self.bm25.get_scores(tokenized_query)
+        
+        # Get top-k indices
+        import numpy as np
+        top_indices = np.argsort(scores)[::-1][:top_k]
+        
+        results = []
+        for idx in top_indices:
+            if scores[idx] > 0: # Only return if there's some match
+                results.append({
+                    "content": self.corpus[idx],
+                    "id": self.doc_ids[idx],
+                    "bm25_score": float(scores[idx]),
+                    "source": "bm25"
+                })
+        return results
+
+
+def _get_bm25_index() -> BM25Index:
+    global _bm25_index
+    if _bm25_index is None:
+        persist_path = Path(settings.chroma_persist_directory) / "bm25_index.pkl"
+        _bm25_index = BM25Index(persist_path)
+    return _bm25_index
 
 
 def _get_collection():
@@ -92,6 +186,43 @@ def search_similar(
         }
 
 
+def search_keyword(
+    query: str,
+    top_k: int | None = None,
+) -> dict[str, Any]:
+    """使用 BM25 進行關鍵字檢索。
+    
+    Args:
+        query: 查詢文字
+        top_k: 返回結果數量
+        
+    Returns:
+        dict: 包含檢索結果的字典
+    """
+    if top_k is None:
+        top_k = settings.retrieval_top_k
+        
+    try:
+        index = _get_bm25_index()
+        results = index.search(query, top_k=top_k)
+        
+        return {
+            "status": "success",
+            "query": query,
+            "results": results,
+            "total_found": len(results),
+        }
+    except Exception as e:
+        logger.error(f"BM25 search failed: {e}")
+        return {
+            "status": "error",
+            "query": query,
+            "error": str(e),
+            "results": [],
+            "total_found": 0,
+        }
+
+
 def add_documents(
     documents: list[str],
     metadatas: list[dict[str, Any]] | None = None,
@@ -123,6 +254,15 @@ def add_documents(
             ids=ids,
         )
         
+        # 2. Update BM25 Index
+        try:
+            index = _get_bm25_index()
+            index.add(documents, ids)
+        except Exception as e:
+            logger.error(f"Failed to update BM25 index: {e}")
+            # We don't fail the whole operation if BM25 fails
+            # but we should log it.
+        
         return {
             "status": "success",
             "added_count": len(documents),
@@ -149,6 +289,13 @@ def delete_documents(ids: list[str]) -> dict[str, Any]:
         collection = _get_collection()
         collection.delete(ids=ids)
         
+        # Update BM25 Index
+        try:
+            index = _get_bm25_index()
+            index.delete(ids)
+        except Exception as e:
+            logger.error(f"Failed to delete from BM25 index: {e}")
+            
         return {
             "status": "success",
             "deleted_count": len(ids),

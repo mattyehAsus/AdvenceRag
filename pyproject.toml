@@ -28,6 +28,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "python-dotenv>=1.0.0",
     "python-magic-bin>=0.4.14",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]
@@ -86,5 +87,10 @@ strict = true
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
