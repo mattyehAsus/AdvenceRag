@@ -2,16 +2,15 @@
 
 import logging
 from typing import Any
-
-import requests
+import httpx
 
 from advence_rag.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-def search_google(query: str, num_results: int = 5) -> dict[str, Any]:
-    """Execute a Google Custom Search.
+async def search_google(query: str, num_results: int = 5) -> dict[str, Any]:
+    """Execute a Google Custom Search asynchronously.
 
     Args:
         query: Search query
@@ -52,9 +51,10 @@ def search_google(query: str, num_results: int = 5) -> dict[str, Any]:
             "num": min(num_results, 10),
         }
         
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
         
         # 3. Process results
         search_results = []
@@ -74,10 +74,17 @@ def search_google(query: str, num_results: int = 5) -> dict[str, Any]:
             "results": search_results,
         }
         
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Google Search API error: {e.response.text}")
+        return {
+            "status": "error",
+            "error": f"API Error: {e.response.status_code}",
+            "results": [],
+        }
     except Exception as e:
         logger.error(f"Google Search failed: {e}")
         return {
             "status": "error",
             "error": str(e),
-            "results": [],
+            "results": [], 
         }
