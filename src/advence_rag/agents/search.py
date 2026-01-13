@@ -12,7 +12,7 @@ from advence_rag.config import get_settings
 settings = get_settings()
 
 
-def search_knowledge_base(
+async def search_knowledge_base(
     query: str,
     top_k: int | None = None,
     collection_name: str | None = None,
@@ -35,13 +35,13 @@ def search_knowledge_base(
     
     # 1. First Pass: Hybrid Search
     # 1a. Vector Search
-    vector_results = search_similar(
+    vector_results = await search_similar(
         query=query,
         top_k=top_k * 3,
     )
     
     # 1b. Keyword Search (BM25)
-    keyword_results = search_keyword(
+    keyword_results = await search_keyword(
         query=query,
         top_k=top_k * 3,
     )
@@ -68,7 +68,7 @@ def search_knowledge_base(
 
     # 3. Second Pass: Cross-Encoder Reranking
     # The reranker will handle the actual fusion by scoring relevance of query vs content
-    reranked = rerank_results(
+    reranked = await rerank_results(
         query=query,
         documents=merged_results,
         top_k=top_k,
@@ -105,8 +105,10 @@ def search_knowledge_base(
 
 
 async def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
-    """使用 Google Search 進行網路搜索 (CRAG fallback)。
+    """使用配置的搜尋引擎 (Serper/Google) 進行網路搜索 (CRAG fallback)。
     
+    具備自動智慧備援功能：如果優先搜尋引擎失敗，會自動切換至另一個引擎。
+
     Args:
         query: 搜索查詢
         num_results: 返回結果數量
@@ -114,9 +116,9 @@ async def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
     Returns:
         dict: 搜索結果
     """
-    from advence_rag.tools.web_search import search_google
+    from advence_rag.tools.web_search import search_web as tool_search_web
     
-    return await search_google(query, num_results)
+    return await tool_search_web(query, num_results)
 
 
 def evaluate_retrieval_quality(

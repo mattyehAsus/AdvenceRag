@@ -25,7 +25,7 @@ class OptimizationPipeline:
     def __init__(self):
         self._scheduler = None
     
-    def process_document(
+    async def process_document(
         self,
         file_path: str | Path,
         parser_type: ParserType = ParserType.AUTO,
@@ -44,36 +44,30 @@ class OptimizationPipeline:
         # Local import to avoid initialization issues
         from advence_rag.tools.knowledge_base import add_documents
         
-        # 1. 自動偵測最佳解析器
+        # 1. 自動偵測最佳解析器 (Metadata access is fine, but detect_best_parser might do IO)
         if parser_type == ParserType.AUTO:
-            parser_type = detect_best_parser(str(path))
+            parser_type = await asyncio.to_thread(detect_best_parser, str(path))
         
         logger.info(f"Processing {path.name} with {parser_type.value} parser")
         
         try:
-            # 2. 解析文檔
+            # 2. 解析文檔 (Parsing is CPU/IO heavy)
             parser = get_parser(parser_type)
-            documents = parser.parse(path)
+            documents = await asyncio.to_thread(parser.parse, path)
             
             # 3. 為每個文檔生成摘要/關鍵要點
             # TODO: Enable summarization after resolving hanging issues
-            # from advence_rag.tools.summarizer import extract_key_points
-            
             processed_docs = []
             for doc in documents:
-                # key_points = extract_key_points(doc.content, max_points=5)
-                # doc.metadata["key_points"] = key_points.get("key_points", [])
-                
-                # Placeholder for key points - convert to string for Chroma
-                doc.metadata["key_points"] = ""  # str(key_points.get("key_points", []))
+                doc.metadata["key_points"] = "" 
                 processed_docs.append(doc)
             
-            # 4. 加入向量資料庫
+            # 4. 加入向量資料庫 (Already refactored to async)
             contents = [doc.content for doc in processed_docs]
             metadatas = [doc.metadata for doc in processed_docs]
             ids = [doc.chunk_id for doc in processed_docs]
             
-            result = add_documents(
+            result = await add_documents(
                 documents=contents,
                 metadatas=metadatas,
                 ids=ids,
@@ -95,7 +89,7 @@ class OptimizationPipeline:
                 "error": str(e),
             }
     
-    def process_directory(
+    async def process_directory(
         self,
         directory: str | Path,
         recursive: bool = True,
@@ -111,16 +105,19 @@ class OptimizationPipeline:
         """
         dir_path = Path(directory)
         
-        if not dir_path.is_dir():
+        if not await asyncio.to_thread(dir_path.is_dir):
             return {"status": "error", "error": f"Not a directory: {directory}"}
         
         # 支援的副檔名
         supported_exts = {".pdf", ".docx", ".doc", ".pptx", ".html", ".txt", ".md"}
         
-        if recursive:
-            files = [f for f in dir_path.rglob("*") if f.suffix.lower() in supported_exts]
-        else:
-            files = [f for f in dir_path.glob("*") if f.suffix.lower() in supported_exts]
+        def find_files():
+            if recursive:
+                return [f for f in dir_path.rglob("*") if f.suffix.lower() in supported_exts]
+            else:
+                return [f for f in dir_path.glob("*") if f.suffix.lower() in supported_exts]
+        
+        files = await asyncio.to_thread(find_files)
         
         results = {
             "status": "success",
@@ -131,7 +128,7 @@ class OptimizationPipeline:
         }
         
         for file in files:
-            result = self.process_document(file)
+            result = await self.process_document(file)
             results["details"].append(result)
             
             if result["status"] == "success":

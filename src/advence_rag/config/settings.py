@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     google_api_key: str = Field(default="", description="Google API Key for Gemini")
     google_search_api_key: str = Field(default="", description="Google Custom Search API Key")
     google_search_cse_id: str = Field(default="", description="Google Custom Search Engine ID")
+    serper_api_key: str = Field(default="", description="Serper.dev API Key")
+    search_provider: Literal["google", "serper"] = Field(default="serper", description="Primary search provider")
 
     # LLM Settings
     llm_model: str = Field(default="gemini-2.5-flash-lite", description="LLM model name")

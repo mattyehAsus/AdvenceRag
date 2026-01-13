@@ -13,12 +13,14 @@ from advence_rag.agents.writer import format_sources
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def verify_full_flow():
+import asyncio
+
+async def verify_full_flow():
     print("--- Verifying End-to-End Agent Interaction ---")
     
     # 1. Simulate Search Agent Output (Web Search)
     print("\n1. Executing Web Search...")
-    search_res = search_web("openai", num_results=1)
+    search_res = await search_web("openai", num_results=1)
     
     if search_res["status"] != "success":
         print("❌ Search failed, cannot verify flow.")
@@ -55,4 +57,4 @@ def verify_full_flow():
     print("\n✅ Knowledge Flow Verified (Search -> Writer)")
 
 if __name__ == "__main__":
-    verify_full_flow()
+    asyncio.run(verify_full_flow())

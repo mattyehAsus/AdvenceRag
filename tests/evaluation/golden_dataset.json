@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ambiguous_1",
+    "query": "Where is the file?",
+    "expected_category": "ambiguous",
+    "must_contain_in_response": ["which file", "provide more details"],
+    "description": "Context-free query should trigger clarification."
+  },
+  {
+    "id": "ambiguous_2",
+    "query": "Tell me more about it.",
+    "expected_category": "ambiguous",
+    "must_contain_in_response": ["clarify", "what would you like to know"],
+    "description": "Vague reference 'it' should trigger clarification."
+  },
+  {
+    "id": "clear_rag_1",
+    "query": "What is Python?",
+    "expected_category": "clear",
+    "must_contain_in_response": ["programming language", "readability"],
+    "description": "Standard query should return a direct answer if knowledge exists."
+  },
+  {
+    "id": "irrelevant_1",
+    "query": "How to bake a pizza?",
+    "expected_category": "irrelevant",
+    "must_contain_in_response": ["web search", "pizza"],
+    "description": "Out-of-domain query should trigger web search or fallback."
+  }
+]

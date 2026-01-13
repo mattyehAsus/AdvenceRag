@@ -1,5 +1,6 @@
 import logging
 import pickle
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -133,7 +134,7 @@ def _get_collection():
     return _collection
 
 
-def search_similar(
+async def search_similar(
     query: str,
     top_k: int | None = None,
     filter_metadata: dict[str, Any] | None = None,
@@ -154,7 +155,9 @@ def search_similar(
     try:
         collection = _get_collection()
         
-        results = collection.query(
+        # Wrap blocking ChromaDB call in thread
+        results = await asyncio.to_thread(
+            collection.query,
             query_texts=[query],
             n_results=top_k,
             where=filter_metadata,
@@ -186,7 +189,7 @@ def search_similar(
         }
 
 
-def search_keyword(
+async def search_keyword(
     query: str,
     top_k: int | None = None,
 ) -> dict[str, Any]:
@@ -204,7 +207,8 @@ def search_keyword(
         
     try:
         index = _get_bm25_index()
-        results = index.search(query, top_k=top_k)
+        # BM25 search is CPU bound, run in thread
+        results = await asyncio.to_thread(index.search, query, top_k=top_k)
         
         return {
             "status": "success",
@@ -223,7 +227,7 @@ def search_keyword(
         }
 
 
-def add_documents(
+async def add_documents(
     documents: list[str],
     metadatas: list[dict[str, Any]] | None = None,
     ids: list[str] | None = None,
@@ -248,7 +252,9 @@ def add_documents(
         if metadatas is None:
             metadatas = [{} for _ in documents]
         
-        collection.add(
+        # Blocking ChromaDB write
+        await asyncio.to_thread(
+            collection.add,
             documents=documents,
             metadatas=metadatas,
             ids=ids,
@@ -257,11 +263,10 @@ def add_documents(
         # 2. Update BM25 Index
         try:
             index = _get_bm25_index()
-            index.add(documents, ids)
+            # BM25 update involves rebuilding model and disk write
+            await asyncio.to_thread(index.add, documents, ids)
         except Exception as e:
             logger.error(f"Failed to update BM25 index: {e}")
-            # We don't fail the whole operation if BM25 fails
-            # but we should log it.
         
         return {
             "status": "success",
@@ -276,7 +281,7 @@ def add_documents(
         }
 
 
-def delete_documents(ids: list[str]) -> dict[str, Any]:
+async def delete_documents(ids: list[str]) -> dict[str, Any]:
     """從知識庫刪除文檔。
     
     Args:
@@ -287,12 +292,12 @@ def delete_documents(ids: list[str]) -> dict[str, Any]:
     """
     try:
         collection = _get_collection()
-        collection.delete(ids=ids)
+        await asyncio.to_thread(collection.delete, ids=ids)
         
         # Update BM25 Index
         try:
             index = _get_bm25_index()
-            index.delete(ids)
+            await asyncio.to_thread(index.delete, ids)
         except Exception as e:
             logger.error(f"Failed to delete from BM25 index: {e}")
             

@@ -1,5 +1,6 @@
 """Rerank Tool - 使用 Cross-Encoder 重新排序檢索結果。"""
 
+import asyncio
 from typing import Any
 
 from advence_rag.config import get_settings
@@ -27,7 +28,7 @@ def _get_reranker():
     return _reranker
 
 
-def rerank_results(
+async def rerank_results(
     query: str,
     documents: list[dict[str, Any]],
     top_k: int | None = None,
@@ -59,8 +60,8 @@ def rerank_results(
         # 準備 query-document pairs
         pairs = [(query, doc.get("content", "")) for doc in documents]
         
-        # 計算相關性分數
-        scores = reranker.predict(pairs)
+        # 計算相關性分數 (CPU bound inference, offload to thread)
+        scores = await asyncio.to_thread(reranker.predict, pairs)
         
         # 將分數加入文檔並排序
         scored_docs = []
