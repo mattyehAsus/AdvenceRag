@@ -16,7 +16,7 @@ from advence_rag.parsers import ParserType, detect_best_parser, get_parser
 # from advence_rag.tools.summarizer import extract_key_points
 
 settings = get_settings()
-logger = logging.getLogger("advence_rag.optimization")
+logger = logging.getLogger(__name__)
 
 
 class OptimizationPipeline:

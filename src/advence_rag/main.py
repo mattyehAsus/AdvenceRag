@@ -5,10 +5,10 @@ import logging
 from advence_rag.interfaces.api.v1.chat import router as chat_router
 from advence_rag.interfaces.api.v1.ingest import router as ingest_router
 from advence_rag.config import get_settings
+from advence_rag.utils.log_config import setup_logging
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("advence_rag")
+# Setup centralized JSON logging
+logger = setup_logging(level="INFO")
 
 settings = get_settings()
 

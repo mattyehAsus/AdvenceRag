@@ -11,17 +11,8 @@ from google.genai import types
 from advence_rag.domain.interfaces import LLMAgentService
 from advence_rag.agent import root_agent
 
-# Setup logger
-logger = logging.getLogger("advence_rag.agent_service")
-logger.setLevel(logging.DEBUG)
-
-# Console handler with formatting
-if not logger.handlers:
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+# Setup logger (inherits from centralized log_config)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
