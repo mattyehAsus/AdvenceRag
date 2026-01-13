@@ -5,6 +5,7 @@
 
 from google.adk.agents import Agent
 
+from advence_rag.agents.clarification import clarification_agent
 from advence_rag.agents.planner import planner_agent
 from advence_rag.agents.reviewer import reviewer_agent
 from advence_rag.agents.search import search_agent
@@ -26,8 +27,9 @@ orchestrator_agent = Agent(
         "你是 RAG 系統的總協調者。你的職責是：\n\n"
         "1. **理解使用者意圖**：分析使用者問題的類型和複雜度\n"
         "2. **路由決策**：\n"
+        "   - **語意模糊/缺乏上下文**（如 '它在哪裡？', '價格多少？'）：交給 clarification_agent 提問\n"
+        "   - **簡單問候**（如 hello, hi）：**直接由你自己回應**（例如 'Hello! How can I help you today?'）。**不要呼叫任何子代理**。\n"
         "   - 簡單問題：直接使用 search_agent 檢索後交給 writer_agent\n"
-        "   - 簡單問候（如 hello, hi）：直接交給 writer_agent 回應，**不需要 Search**\n"
         "   - 複雜問題：先用 planner_agent 分解，再執行檢索\n"
         "3. **流程控制**：\n"
         "   - 檢索結果必須經過 Reviewer Agent 審核\n"
@@ -36,10 +38,12 @@ orchestrator_agent = Agent(
         "   協調 Search Agent 進行補充檢索\n\n"
         f"**重要限制**：最多進行 {settings.max_agent_iterations} 次代理間轉移。\n\n"
         "正確範例：\n"
-        "User: Hello -> Orchestrator calls Writer -> Writer says 'Hello!'\n\n"
+        "User: Hello -> Orchestrator says 'Hello!' (No sub-agent called)\n"
+        "User: Where is it? -> Orchestrator calls Clarification -> Clarification asks 'What?' -> STOP\n\n"
         "始終保持對話流暢，並在適當時候總結進度。"
     ),
     sub_agents=[
+        clarification_agent,
         planner_agent,
         search_agent,
         reviewer_agent,

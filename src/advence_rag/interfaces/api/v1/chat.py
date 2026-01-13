@@ -18,12 +18,17 @@ from advence_rag.infrastructure.ai.agent_service import OrchestratorAgentService
 
 router = APIRouter()
 
-from functools import lru_cache
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
 
-# Simple Dependency Injection for now
-@lru_cache()
+# Global singleton instance
+_agent_service: LLMAgentService | None = None
+
 def get_agent_service() -> LLMAgentService:
-    return OrchestratorAgentService()
+    global _agent_service
+    if _agent_service is None:
+        session_service = InMemorySessionService()
+        _agent_service = OrchestratorAgentService(session_service=session_service)
+    return _agent_service
 
 # 心跳間隔（秒）- 較短以防止 Open WebUI 超時
 HEARTBEAT_INTERVAL = 2

@@ -73,3 +73,12 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 - **WHEN** 系統同時處理 100 個並行的檢索請求
 - **THEN** Main Event Loop 不應被阻塞，所有 HTTP 請求應透過 `httpx` 或 `aiohttp` 並行發出
 
+### Requirement: Intelligent Query Handling
+The system MUST be able to handle ambiguous queries by asking clarifying questions instead of guessing.
+
+#### Scenario: Ambiguity Detection
+- **GIVEN** a user query that is vague or missing key entities (e.g., "Where is it?")
+- **WHEN** the Orchestrator processes the query
+- **THEN** it MUST route the request to a `Clarification Agent`
+- **AND** the system MUST return a clarifying question to the user.
+

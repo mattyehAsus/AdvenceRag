@@ -39,6 +39,7 @@ name = "advence-rag"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiofiles" },
     { name = "fastapi" },
     { name = "google-adk" },
     { name = "google-genai" },
@@ -93,6 +94,7 @@ unstructured = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "apscheduler", marker = "extra == 'full'", specifier = ">=3.10.0" },
     { name = "apscheduler", marker = "extra == 'scheduler'", specifier = ">=3.10.0" },
     { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=0.4.0" },

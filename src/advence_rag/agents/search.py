@@ -104,7 +104,7 @@ def search_knowledge_base(
     return "\n".join(output_lines)
 
 
-def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
+async def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
     """使用 Google Search 進行網路搜索 (CRAG fallback)。
     
     Args:
@@ -116,7 +116,7 @@ def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
     """
     from advence_rag.tools.web_search import search_google
     
-    return search_google(query, num_results)
+    return await search_google(query, num_results)
 
 
 def evaluate_retrieval_quality(

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from google.adk import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from advence_rag.infrastructure.persistence.file_session_service import FileSessionService
 from google.genai import types
 
 from advence_rag.domain.interfaces import LLMAgentService
@@ -133,6 +134,7 @@ class OrchestratorAgentService(LLMAgentService):
     
     def __init__(self, session_service: Optional[InMemorySessionService] = None):
         self.session_service = session_service or InMemorySessionService()
+
         self.app_name = "advence_rag"
 
     async def chat(self, messages: List[Dict[str, str]], stream: bool = False, session_id: Optional[str] = None) -> Any:

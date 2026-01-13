@@ -12,6 +12,12 @@ Advence RAG 是一個基於 Google ADK (Agent Development Kit) 的多代理 (Mul
 - **排程**: APScheduler
 - **重排序**: Sentence-Transformers
 
+### Package Management (uv)
+- **Run Scripts**: `uv run <script_path>` (e.g., `uv run tests/verify_clarification.py`)
+- **Add Dependency**: `uv add <package_name>`
+- **Install/Sync**: `uv sync`
+- **Lock**: `uv lock`
+
 ## Project Conventions
 
 ### Code Style
@@ -29,8 +35,11 @@ Advence RAG 是一個基於 Google ADK (Agent Development Kit) 的多代理 (Mul
 - **異步測試**: `pytest-asyncio`
 - **結構**: 測試案例存放於 `tests/` 目錄。
 
-### Git Workflow
-[尚未定義具體分支策略，預設為主幹開發模式]
+### Development Methodology
+- **Spec-Driven Development (OpenSpec)**:
+  - 本專案採用規格驅動開發。所有功能變更與架構調整，必須先在 `openspec/changes/` 建立提案 (Proposal)。
+  - 實作前請務必參閱 `openspec/AGENTS.md`。
+- **Git Workflow**: 建議每個 OpenSpec Change 建立獨立分支。
 
 ## Domain Context
 - **RAG**: 檢索增強生成，結合檢索與 LLM 生成能力。
