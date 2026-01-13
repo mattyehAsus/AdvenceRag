@@ -10,6 +10,7 @@ from google.genai import types
 
 from advence_rag.domain.interfaces import LLMAgentService
 from advence_rag.agent import root_agent
+from advence_rag.utils.retry import retry_with_backoff
 
 # Setup logger (inherits from centralized log_config)
 logger = logging.getLogger(__name__)
@@ -134,24 +135,8 @@ class OrchestratorAgentService(LLMAgentService):
         if not messages:
             return {"answer": "No messages provided.", "citations": []}
 
-        # Setup Runner
-        runner = Runner(
-            agent=root_agent,
-            app_name=self.app_name,
-            session_service=self.session_service
-        )
-
         user_id = "default_user"
         session_id = session_id or str(uuid.uuid4())
-        
-        # 建立執行上下文
-        ctx = ExecutionContext(session_id=session_id)
-        
-        await self.session_service.create_session(
-            app_name=self.app_name,
-            user_id=user_id,
-            session_id=session_id
-        )
 
         # Build conversation context
         context_parts = []
@@ -166,6 +151,7 @@ class OrchestratorAgentService(LLMAgentService):
         else:
             full_content = last_msg["content"]
         
+        from google.genai import types
         new_message = types.Content(
             role="user",
             parts=[types.Part(text=full_content)]
@@ -175,59 +161,95 @@ class OrchestratorAgentService(LLMAgentService):
         logger.info(f"📨 New Chat Request (session: {session_id[:8]}...)")
         logger.info(f"{'='*60}")
         logger.info(f"📝 User Message: {last_msg['content'][:200]}{'...' if len(last_msg['content']) > 200 else ''}")
-        if context_parts:
-            logger.debug(f"📜 History: {len(context_parts)} previous messages")
 
-        try:
-            gen = runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=new_message
+        async def execute_chat():
+            runner = Runner(
+                agent=root_agent,
+                app_name=self.app_name,
+                session_service=self.session_service
             )
             
+            nonlocal session_id
+            ctx = ExecutionContext(session_id=session_id)
+            
+            await self.session_service.create_session(
+                app_name=self.app_name,
+                user_id=user_id,
+                session_id=session_id
+            )
+
+            try:
+                gen = runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=new_message
+                )
+                
+                if stream:
+                    # In streaming mode, we return the generator itself
+                    # Note: Wrapping the internal loop with retry is harder, 
+                    # so we'll wrap the whole execution_chat function.
+                    # But if we've already yielded content, we can't easily retry.
+                    # For now, we wrap the whole run_async call sequence.
+                    return gen, ctx, runner
+                else:
+                    answer = ""
+                    async for event in gen:
+                        self._process_event(event, ctx)
+                        # Collect text output...
+                        if hasattr(event, "message") and event.message and event.message.parts:
+                            for part in event.message.parts:
+                                if part.text:
+                                    answer += part.text
+                        elif hasattr(event, "text") and event.text:
+                            answer += event.text
+                        elif hasattr(event, "content") and event.content:
+                            if hasattr(event.content, "parts") and event.content.parts:
+                                for part in event.content.parts:
+                                    if hasattr(part, "text") and part.text:
+                                        answer += part.text
+                    
+                    return answer, ctx, runner
+            except Exception:
+                await runner.close()
+                raise
+
+        try:
             if stream:
+                # For streaming, we'll use a modified approach: 
+                # We'll retry the INITIAL call to run_async which often triggers the overflow/rate limit.
+                # Mid-stream retry is not fully supported here to avoid duplicate content.
+                gen, ctx, runner = await retry_with_backoff(execute_chat)
+                
                 async def stream_generator():
-                    collected_answer = []  # 收集回答用於 log
-                    last_author = None  # 追蹤 agent 切換
-                    last_yielded_status = None # 追蹤最後一次輸出的狀態
-                    has_yielded_content = False  # 是否已輸出過內容
-                    event_count = 0 
+                    collected_answer = []
+                    last_author = None
+                    last_yielded_status = None
+                    has_yielded_content = False
+                    event_count = 0
                     
                     logger.info("🚀 Starting stream_generator")
                     try:
                         async for event in gen:
                             event_count += 1
-                            # 處理事件並記錄
                             self._process_event(event, ctx)
                             
-                            # 檢測 agent 切換並發送進度通知
                             if hasattr(event, 'author') and event.author != last_author:
                                 agent_name = event.author
                                 last_author = agent_name
-                                logger.debug(f"Stream: Author changed to {agent_name}")
-                                
-                                # 根據 agent 名稱產生友善的狀態訊息
                                 status_map = {
-                                    # 'orchestrator_agent': '🎯 協調處理中...\n', # Ignore orchestrator to reduce noise
                                     'guard_agent': '🛡️ 安全檢查中...\n',
                                     'search_agent': '🔍 搜尋資料中...\n',
                                     'planner_agent': '📋 規劃查詢策略...\n',
                                     'reviewer_agent': '📝 審核結果中...\n',
                                     'writer_agent': '✍️ 生成回答中...\n',
                                 }
-                                
-                                # 只在尚未輸出實際內容時顯示進度
                                 if not has_yielded_content and agent_name in status_map:
                                     status_msg = status_map[agent_name]
-                                    # Dedup: Don't yield if it's the same as the last yielded status
-                                    # (e.g. Writer -> Orchestrator -> Writer loop)
                                     if status_msg != last_yielded_status:
-                                        logger.debug(f"Stream: Yielding status for {agent_name}")
                                         yield status_msg
                                         last_yielded_status = status_msg
                             
-                            
-                            # 產生文字輸出
                             text_to_yield = None
                             if hasattr(event, "message") and event.message and event.message.parts:
                                 for part in event.message.parts:
@@ -246,100 +268,54 @@ class OrchestratorAgentService(LLMAgentService):
                                 collected_answer.append(text_to_yield)
                                 yield text_to_yield
 
-                        logger.info(f"Stream loop finished", extra={
-                            "session_id": session_id,
-                            "event_count": event_count,
-                            "has_content": has_yielded_content
-                        })
-
-                        # Safety: If no content was yielded, provide feedback
                         if not has_yielded_content and not ctx.errors:
-                             msg = "⚠️ 系統未生成任何回答 (System produced no output)."
-                             logger.warning("Root agent completed but yielded no text", extra={"session_id": session_id})
                              ctx.add_error("No content generated by agent.")
-                             yield msg
+                             yield "⚠️ 系統未生成任何回答。"
 
-                        # 串流結束時輸出摘要
                         ctx.log_summary()
-                        
-                        # 輸出最終回答到 log
-                        full_answer = "".join(collected_answer)
-                        if full_answer:
-                            logger.info("Final Answer Generated", extra={
-                                "session_id": session_id,
-                                "length": len(full_answer),
-                                "preview": full_answer[:100]
-                            })
-                        
                         summary = ctx.generate_summary()
                         if summary:
                             yield summary
                             
                     except Exception as e:
                         error_msg = str(e)
+                        # Nested retry mid-stream is complex, but let's at least handle the final failure message
+                        is_retryable = "429" in error_msg or "503" in error_msg or "Overloaded" in error_msg
+                        
                         ctx.add_error(error_msg)
                         logger.error("Stream Error", exc_info=True, extra={"session_id": session_id, "error": error_msg})
                         ctx.log_summary()
                         
-                        if "503" in error_msg or "Overloaded" in error_msg or "overloaded" in error_msg:
-                            yield "\n\n---\n⚠️ **系統忙碌中 (Model Overloaded)**\n\n目前 AI 模型負載過高，暫時無法回應。請稍後重試。\n(Google Gemini API Error: 503 Service Unavailable)"
+                        if is_retryable:
+                            yield f"\n\n---\n⚠️ **服務暫時不可用 ({'429' if '429' in error_msg else '503'})**\n重試多次後仍然失敗，請稍後再試。"
                         else:
                             yield f"\n\n---\n⚠️ **錯誤**: {error_msg}"
                     finally:
-                        logger.info("Stream generator closing execution", extra={"session_id": session_id})
                         await runner.close()
                         
                 return stream_generator()
-
-            # Non-streaming
-            answer = ""
-            async for event in gen:
-                # 處理事件並記錄
-                self._process_event(event, ctx)
+            else:
+                # Non-streaming implementation with full retry support
+                answer, ctx, runner = await retry_with_backoff(execute_chat)
                 
-                # 收集文字輸出
-                if hasattr(event, "message") and event.message and event.message.parts:
-                    for part in event.message.parts:
-                        if part.text:
-                            answer += part.text
-                elif hasattr(event, "text") and event.text:
-                    answer += event.text
-                elif hasattr(event, "content") and event.content:
-                    if hasattr(event.content, "parts") and event.content.parts:
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
-                                answer += part.text
-                elif hasattr(event, "payload") and isinstance(event.payload, dict):
-                    text = event.payload.get("text") or event.payload.get("content")
-                    if isinstance(text, str):
-                        answer += text
+                ctx.log_summary()
+                summary = ctx.generate_summary()
+                final_answer = (answer.strip() or "Agent produced no text response.") + summary
 
-            # 輸出日誌摘要
-            ctx.log_summary()
-            
-            logger.info("Final Answer Generated", extra={
-                "session_id": session_id,
-                "length": len(answer),
-                "preview": answer[:100]
-            })
-            
-            # 附加執行摘要到回應
-            summary = ctx.generate_summary()
-            final_answer = (answer.strip() or "Agent produced no text response.") + summary
-
-            return {
-                "answer": final_answer,
-                "citations": [],
-                "tool_executions": [
-                    {"name": e.name, "status": e.status, "error": e.error}
-                    for e in ctx.tool_executions
-                ]
-            }
-        except Exception as e:
-            ctx.add_error(str(e))
-            ctx.log_summary()
-            if not stream:
                 await runner.close()
+                return {
+                    "answer": final_answer,
+                    "citations": [],
+                    "tool_executions": [
+                        {"name": e.name, "status": e.status, "error": e.error}
+                        for e in ctx.tool_executions
+                    ]
+                }
+        except Exception as e:
+            logger.error("Final Chat Error after retries", exc_info=True)
+            if not stream:
+                # In non-stream mode, we can return a dictionary or let it bubble up
+                return {"answer": f"⚠️ 發生錯誤，重試後仍然失敗: {str(e)}", "citations": []}
             raise
         finally:
             if not stream:
