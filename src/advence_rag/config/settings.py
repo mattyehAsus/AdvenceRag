@@ -7,12 +7,16 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 找到專案根目錄的 .env 檔案
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_ENV_FILE = _PROJECT_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE) if _ENV_FILE.exists() else ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -23,7 +27,7 @@ class Settings(BaseSettings):
     google_search_cse_id: str = Field(default="", description="Google Custom Search Engine ID")
 
     # LLM Settings
-    llm_model: str = Field(default="gemini-2.0-flash", description="LLM model name")
+    llm_model: str = Field(default="gemini-2.5-flash-lite", description="LLM model name")
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
 
     # Embedding
@@ -57,6 +61,19 @@ class Settings(BaseSettings):
 
     # Processing Settings
     max_reflection_iterations: int = Field(default=3)
+    max_agent_iterations: int = Field(default=5, description="Maximum iterations between agents (e.g., writer <-> orchestrator)")
+
+    @property
+    def data_dir(self) -> Path:
+        """Get the base data directory."""
+        return self.chroma_persist_directory.parent
+
+    @property
+    def uploads_dir(self) -> Path:
+        """Get the uploads directory."""
+        path = self.data_dir / "uploads"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")

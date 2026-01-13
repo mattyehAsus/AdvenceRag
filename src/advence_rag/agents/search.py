@@ -16,7 +16,7 @@ def search_knowledge_base(
     query: str,
     top_k: int | None = None,
     collection_name: str | None = None,
-) -> dict[str, Any]:
+) -> str:
     """從知識庫檢索相關文檔。
     
     Args:
@@ -74,17 +74,34 @@ def search_knowledge_base(
         top_k=top_k,
     )
     
-    if reranked["status"] == "success":
-        return {
-            "status": "success",
-            "query": query,
-            "results": reranked["results"],
-            "total_found": len(merged_results),
-            "reranked": True,
-            "search_type": "hybrid"
-        }
+    # Limit content length for LLM consumption
+    final_results = []
     
-    return {"status": "success", "results": merged_results[:top_k], "total_found": len(merged_results)}
+    # Determine which list to use
+    source_results = reranked["results"] if reranked["status"] == "success" else merged_results[:top_k]
+    
+    # User Request: Reduce number of results, but keep full content.
+    # Limit to top 10 to avoid context overflow with full content.
+    display_limit = 10
+    display_results = source_results[:display_limit]
+    
+    output_lines = [f"### Search found {len(source_results)} documents (Showing top {len(display_results)}):"]
+    
+    for i, doc in enumerate(display_results, 1):
+        content = doc.get("content", "")
+        # Full content enabled (User request)
+        snippet = content
+        score = doc.get("rerank_score", doc.get("bm25_score", 0.0))
+        
+        doc_info = (
+            f"[{i}] Document (Score: {score:.2f})\n"
+            f"   Source: {doc.get('source', 'unknown')}\n"
+            f"   Content: {snippet}\n"
+        )
+        final_results.append(doc)
+        output_lines.append(doc_info)
+        
+    return "\n".join(output_lines)
 
 
 def search_web(query: str, num_results: int = 5) -> dict[str, Any]:
@@ -161,7 +178,12 @@ search_agent = Agent(
         "2. 首先從內部知識庫 (Chroma) 檢索\n"
         "3. 評估檢索結果的品質和相關性\n"
         "4. 如果結果不足，使用 CRAG 策略進行網路搜索補充\n"
-        "5. 整合並返回最相關的文檔\n\n"
+        "5. **CRITICAL STEP**: After tools execution, you **MUST** speak!\n"
+        "   - **Do NOT be silent.**\n"
+        "   - You must output a detailed summary of what you found.\n"
+        "   - Format: '### Search Results for [Query]...'\n"
+        "   - Summarize the key content from the retrieved documents.\n"
+        "   - If you found 30 documents, TELL ME what is in them!\n\n"
         "CRAG 策略：\n"
         "- 評估每個檢索結果的相關性分數\n"
         "- 如果平均分數 < 0.7 或結果數量 < 3，觸發網路搜索\n"

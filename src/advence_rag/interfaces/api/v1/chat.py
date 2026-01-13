@@ -1,0 +1,151 @@
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+import time
+import uuid
+import json
+import asyncio
+
+from advence_rag.interfaces.api.v1.schemas import (
+    ChatCompletionRequest, 
+    ChatCompletionResponse, 
+    ChatCompletionChoice,
+    ChatMessage,
+    ModelListResponse,
+    ModelObject
+)
+from advence_rag.domain.interfaces import LLMAgentService
+from advence_rag.infrastructure.ai.agent_service import OrchestratorAgentService
+
+router = APIRouter()
+
+# Simple Dependency Injection for now
+def get_agent_service() -> LLMAgentService:
+    return OrchestratorAgentService()
+
+# 心跳間隔（秒）- 較短以防止 Open WebUI 超時
+HEARTBEAT_INTERVAL = 2
+
+@router.post("/chat/completions", response_model=ChatCompletionResponse)
+async def chat_completions(
+    request: ChatCompletionRequest,
+    agent_service: LLMAgentService = Depends(get_agent_service)
+):
+    """OpenAI-compatible chat completions endpoint."""
+    try:
+        # Adapt Pydantic messages to list of dicts for the service
+        messages = [m.model_dump() for m in request.messages]
+        
+        if request.stream:
+            async def event_generator():
+                resp_id = f"chatcmpl-{uuid.uuid4()}"
+                created = int(time.time())
+                
+                # Execute agent workflow with streaming
+                token_gen = await agent_service.chat(messages, stream=True)
+                
+                # 包裝 generator 以支援心跳
+                token_queue = asyncio.Queue()
+                stream_done = asyncio.Event()
+                
+                async def consume_tokens():
+                    """消費 token 並放入 queue"""
+                    print(f"DEBUG: Starting consume_tokens task for {resp_id}") # DEBUG LOG
+                    try:
+                        async for token in token_gen:
+                            await token_queue.put(token)
+                        print(f"DEBUG: consume_tokens finished normally for {resp_id}") # DEBUG LOG
+                    except Exception as e:
+                        print(f"DEBUG: consume_tokens error for {resp_id}: {e}") # DEBUG LOG
+                        await token_queue.put(f"[Error: {e}]")
+                    finally:
+                        stream_done.set()
+                        print(f"DEBUG: stream_done set for {resp_id}") # DEBUG LOG
+                
+                # 啟動 token 消費任務
+                consumer_task = asyncio.create_task(consume_tokens())
+                
+                try:
+                    while not stream_done.is_set() or not token_queue.empty():
+                        try:
+                            # 嘗試在心跳間隔內獲取 token
+                            token = await asyncio.wait_for(
+                                token_queue.get(), 
+                                timeout=HEARTBEAT_INTERVAL
+                            )
+                            
+                            if not token:
+                                continue
+                            
+                            data = ChatCompletionResponse(
+                                id=resp_id,
+                                created=created,
+                                model=request.model,
+                                choices=[
+                                    ChatCompletionChoice(
+                                        index=0,
+                                        delta=ChatMessage(role="assistant", content=token),
+                                        finish_reason=None
+                                    )
+                                ]
+                            )
+                            yield f"data: {data.model_dump_json()}\n\n"
+                            
+                        except asyncio.TimeoutError:
+                            # 超時時發送 SSE 註解心跳（不會顯示在 client）
+                            if not stream_done.is_set():
+                                yield f": ping {int(time.time())}\n\n"
+                
+                finally:
+                    # 確保消費任務完成
+                    if not consumer_task.done():
+                        consumer_task.cancel()
+                        try:
+                            await consumer_task
+                        except asyncio.CancelledError:
+                            pass
+                
+                # End of stream
+                final_data = ChatCompletionResponse(
+                    id=resp_id,
+                    created=created,
+                    model=request.model,
+                    choices=[
+                        ChatCompletionChoice(
+                            index=0,
+                            delta=ChatMessage(role="assistant", content=""),
+                            finish_reason="stop"
+                        )
+                    ]
+                )
+                yield f"data: {final_data.model_dump_json()}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(event_generator(), media_type="text/event-stream")
+        
+        # Non-streaming
+        result = await agent_service.chat(messages, stream=False)
+        
+        # Build OpenAI compatible response
+        return ChatCompletionResponse(
+            id=f"chatcmpl-{uuid.uuid4()}",
+            created=int(time.time()),
+            model=request.model,
+            choices=[
+                ChatCompletionChoice(
+                    index=0,
+                    message=ChatMessage(role="assistant", content=result["answer"]),
+                    finish_reason="stop"
+                )
+            ]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/models", response_model=ModelListResponse)
+async def list_models():
+    """List available models for Open WebUI selection."""
+    return ModelListResponse(
+        data=[
+            ModelObject(id="advence-rag-agent")
+        ]
+    )
