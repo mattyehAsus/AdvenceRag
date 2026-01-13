@@ -131,8 +131,8 @@ class ExecutionContext:
 class OrchestratorAgentService(LLMAgentService):
     """Infrastructure implementation of LLMAgentService using the ADK Orchestrator."""
     
-    def __init__(self):
-        self.session_service = InMemorySessionService()
+    def __init__(self, session_service: Optional[InMemorySessionService] = None):
+        self.session_service = session_service or InMemorySessionService()
         self.app_name = "advence_rag"
 
     async def chat(self, messages: List[Dict[str, str]], stream: bool = False, session_id: Optional[str] = None) -> Any:

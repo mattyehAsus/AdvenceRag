@@ -32,9 +32,15 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 - **WHEN** 需要更換向量資料庫（如從 ChromaDB 遷移至 Qdrant）
 - **THEN** 僅需在 `Infrastructure` 層實作新的 Repository，且不得修改 `Application` 或 `Domain` 層的代碼。
 
+#### Scenario: Persistence Migration
+- **WHEN** 需要將 Session 儲存從 Memory 遷移至 Redis
+- **THEN** 僅需抽換 `main.py` 中的 `SessionService` 實作，而不影響 Agent 核心邏輯。
+
 ### Requirement: OpenAPI Compliance
 所有的外部介面端點 **SHALL** 符合 OpenAPI 3.x 規範，並提供自動生成的交互式文檔 (Swagger UI)。
 
+#### Scenario: API Documentation Access
+- **WHEN** 服務啟動後造訪 `/docs` 路徑
 - **THEN** 系統必須展示完整的 API 規格、請求參數定義與回應範例
 
 ### Requirement: Intelligent Interaction
@@ -43,4 +49,12 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 #### Scenario: Ambiguous Query Clarification
 - **WHEN** 使用者輸入模糊的查詢（例如「那個文件在哪？」）
 - **THEN** Agent 不應直接搜尋，而應反問使用者「請問您指的是哪一份文件？或是關於哪個主題的文件？」
+
+### Requirement: Session State Management
+系統 **MUST** 具備狀態管理機制，能夠在多輪對話中維持 User 與 Agent 的交互上下文 (Session Context)。
+
+#### Scenario: Multi-turn Context
+- **WHEN** 使用者在第一輪對話提及「我的專案代碼」
+- **AND** 在第二輪對話僅說「幫我總結一下」
+- **THEN** Agent 必須能存取 Session 中的第一輪記憶，針對「該專案代碼」進行總結
 

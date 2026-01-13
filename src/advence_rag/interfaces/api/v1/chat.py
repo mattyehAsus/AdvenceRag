@@ -18,7 +18,10 @@ from advence_rag.infrastructure.ai.agent_service import OrchestratorAgentService
 
 router = APIRouter()
 
+from functools import lru_cache
+
 # Simple Dependency Injection for now
+@lru_cache()
 def get_agent_service() -> LLMAgentService:
     return OrchestratorAgentService()
 
