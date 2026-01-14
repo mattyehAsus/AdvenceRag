@@ -14,7 +14,7 @@ class IngestDocumentUseCase:
     def __init__(self, kb_repo: KnowledgeBaseRepository):
         self.kb_repo = kb_repo
 
-    def execute(
+    async def execute(
         self, 
         file_path: str | Path, 
         parser_type: ParserType = ParserType.AUTO
@@ -25,14 +25,15 @@ class IngestDocumentUseCase:
             return {"status": "error", "error": f"File not found: {path}"}
             
         if parser_type == ParserType.AUTO:
-            parser_type = detect_best_parser(str(path))
+            import asyncio
+            parser_type = await asyncio.to_thread(detect_best_parser, str(path))
             
         try:
             parser = get_parser(parser_type)
             # Existing parsers return list of advence_rag.parsers.base.Document
             # Which is luckily compatible (or needs minor mapping if we want strict Domain)
             # Let's map for future safety.
-            raw_docs = parser.parse(path)
+            raw_docs = await asyncio.to_thread(parser.parse, path)
             
             domain_docs = [
                 Document(
@@ -44,7 +45,7 @@ class IngestDocumentUseCase:
                 ) for rd in raw_docs
             ]
             
-            return self.kb_repo.add_documents(domain_docs)
+            return await self.kb_repo.add_documents(domain_docs)
             
         except Exception as e:
             logger.error(f"Ingestion failed for {path}: {e}")

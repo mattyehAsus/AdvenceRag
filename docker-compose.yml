@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  # AdvenceRAG Backend Service
+  advence-rag:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: advence-rag
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Google API Keys
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY:-}
+      - GOOGLE_SEARCH_CSE_ID=${GOOGLE_SEARCH_CSE_ID:-}
+      # Web Search Provider
+      - SEARCH_PROVIDER=${SEARCH_PROVIDER:-serper}
+      - SERPER_API_KEY=${SERPER_API_KEY:-}
+      # Vector Database
+      - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
+      - CHROMA_COLLECTION_NAME=${CHROMA_COLLECTION_NAME:-knowledge_base}
+      # LLM Settings
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.7}
+      # Embedding Model
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-models/text-embedding-004}
+      # Guard Agent
+      - GUARD_ENABLED=${GUARD_ENABLED:-true}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      # Persist vector database and sessions
+      - advence-rag-data:/app/data
+      - advence-rag-sessions:/app/.sessions
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Open WebUI - ChatGPT-like interface
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    environment:
+      # Disable built-in Ollama since we use external API
+      - OLLAMA_BASE_URL=
+      # Point to AdvenceRAG's OpenAI-compatible API
+      - OPENAI_API_BASE_URL=http://advence-rag:8000/v1
+      - OPENAI_API_KEY=${GOOGLE_API_KEY:-sk-placeholder}
+      # WebUI settings
+      - WEBUI_NAME=AdvenceRAG
+      - ENABLE_SIGNUP=true
+      - DEFAULT_USER_ROLE=user
+    volumes:
+      - open-webui-data:/app/backend/data
+    networks:
+      - rag-network
+    depends_on:
+      advence-rag:
+        condition: service_healthy
+
+volumes:
+  advence-rag-data:
+    driver: local
+  advence-rag-sessions:
+    driver: local
+  open-webui-data:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge

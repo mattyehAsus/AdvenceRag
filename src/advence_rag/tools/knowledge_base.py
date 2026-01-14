@@ -250,7 +250,16 @@ async def add_documents(
             ids = [str(uuid.uuid4()) for _ in documents]
         
         if metadatas is None:
-            metadatas = [{} for _ in documents]
+            metadatas = [{"source": "imported"} for _ in documents]
+        else:
+            # Clean metadatas: remove None values and ensure no empty dicts
+            cleaned_metadatas = []
+            for m in metadatas:
+                cleaned = {k: v for k, v in m.items() if v is not None}
+                if not cleaned:
+                    cleaned = {"source": "imported"}
+                cleaned_metadatas.append(cleaned)
+            metadatas = cleaned_metadatas
         
         # Blocking ChromaDB write
         await asyncio.to_thread(

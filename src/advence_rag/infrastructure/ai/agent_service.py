@@ -92,10 +92,13 @@ class ExecutionContext:
         return "\n".join(lines)
     
     def log_summary(self):
-        """在 terminal 輸出詳細日誌"""
+        """在 terminal 輸出詳細執行日誌"""
         logger.info(f"\n{'─'*50}")
         logger.info(f"📊 執行摘要 (Session: {self.session_id[:8]}...)")
         logger.info(f"{'─'*50}")
+        
+        if not self.tool_executions and not self.errors:
+            logger.info("  (無工具執行記錄)")
         
         for exec in self.tool_executions:
             if exec.status == "success":
@@ -109,15 +112,6 @@ class ExecutionContext:
             logger.warning(f"⚠️ 總錯誤數: {len(self.errors)}")
             for error in self.errors:
                 logger.error(f"   └─ {error}")
-        
-        # 輸出使用者可見的摘要到 log
-        summary = self.generate_summary()
-        if summary:
-            logger.info(f"{'─'*50}")
-            logger.info("📋 使用者回應摘要:")
-            for line in summary.split('\n'):
-                if line.strip():
-                    logger.info(f"   {line}")
         
         logger.info(f"{'─'*50}\n")
 
@@ -198,18 +192,24 @@ class OrchestratorAgentService(LLMAgentService):
                     answer = ""
                     async for event in gen:
                         self._process_event(event, ctx)
+                        
+                        # 在非串流模式下，我們只收集「完整」的內容，不要收集 partial 的內容以免重複
+                        is_partial = getattr(event, 'partial', False)
+                        if is_partial:
+                            continue
+                            
                         # Collect text output...
                         if hasattr(event, "message") and event.message and event.message.parts:
                             for part in event.message.parts:
                                 if part.text:
-                                    answer += part.text
+                                    answer = part.text  # 直接替換為最新的完整內容
                         elif hasattr(event, "text") and event.text:
-                            answer += event.text
+                            answer = event.text
                         elif hasattr(event, "content") and event.content:
                             if hasattr(event.content, "parts") and event.content.parts:
                                 for part in event.content.parts:
                                     if hasattr(part, "text") and part.text:
-                                        answer += part.text
+                                        answer = part.text
                     
                     return answer, ctx, runner
             except Exception:
@@ -228,6 +228,7 @@ class OrchestratorAgentService(LLMAgentService):
                     last_author = None
                     last_yielded_status = None
                     has_yielded_content = False
+                    is_thought_block_open = False
                     event_count = 0
                     
                     logger.info("🚀 Starting stream_generator")
@@ -249,6 +250,9 @@ class OrchestratorAgentService(LLMAgentService):
                                 if not has_yielded_content and agent_name in status_map:
                                     status_msg = status_map[agent_name]
                                     if status_msg != last_yielded_status:
+                                        if not is_thought_block_open:
+                                            yield "<thought>\n"
+                                            is_thought_block_open = True
                                         yield status_msg
                                         last_yielded_status = status_msg
                             
@@ -268,19 +272,41 @@ class OrchestratorAgentService(LLMAgentService):
                                             text_to_yield = part.text
                             
                             if text_to_yield:
-                                # 若是 partial 訊息，我們假設它就是 delta（SSE 模式下通常如此）
-                                # 若非 partial，則可能是該 turn 的完整訊息
+                                # 決定目前的作者是否為主說話者
+                                main_speakers = ['writer_agent', 'orchestrator_agent', 'clarification_agent', 'guard_agent', 'reviewer_agent']
+                                is_main_speaker = last_author in main_speakers
+                                
+                                # 如果是主代理，則確保關閉 thought 區塊以顯示正式回答
+                                if is_main_speaker:
+                                    if is_thought_block_open:
+                                        yield "</thought>\n\n"
+                                        is_thought_block_open = False
+                                    has_yielded_content = True
+                                else:
+                                    # 子代理的文字，若 block 沒開則打開
+                                    if not has_yielded_content and not is_thought_block_open:
+                                        yield "<thought>\n"
+                                        is_thought_block_open = True
+                                    
                                 if is_partial:
                                     has_yielded_content = True
+                                    # 只輸出增量（delta）。在 SSE 模式下，text_to_yield 通常就是 delta。
                                     collected_answer.append(text_to_yield)
                                     yield text_to_yield
                                 else:
-                                    # 如果之前已經透過 partial 輸出了，則不要重複輸出完整訊息
-                                    # 但如果完全沒輸出過，就輸出
-                                    if not has_yielded_content:
+                                    # 對於非 partial (final) 事件，我們比對長度來決定是否輸出剩餘內容
+                                    # 這樣可以捕捉到 Agent 在最後一刻才補上的「參考來源」或「延伸查詢」
+                                    full_text = text_to_yield
+                                    current_collected = "".join(collected_answer)
+                                    
+                                    if len(full_text) > len(current_collected):
+                                        extra_content = full_text[len(current_collected):]
                                         has_yielded_content = True
-                                        collected_answer.append(text_to_yield)
-                                        yield text_to_yield
+                                        collected_answer.append(extra_content)
+                                        yield extra_content
+
+                        if is_thought_block_open:
+                            yield "</thought>\n\n"
 
                         if not has_yielded_content and not ctx.errors:
                              ctx.add_error("No content generated by agent.")

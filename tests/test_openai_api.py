@@ -27,7 +27,7 @@ async def test_streaming():
     payload = {
         "model": "advence-rag-agent",
         "messages": [
-            {"role": "user", "content": "Tell me a short joke."}
+            {"role": "user", "content": "詳細介紹巴塞隆納的阿瑪特耶之家 (Casa Amatller) 的建築特色與歷史背景。"}
         ],
         "stream": True
     }

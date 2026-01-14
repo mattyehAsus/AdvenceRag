@@ -6,7 +6,7 @@ class KnowledgeBaseRepository(ABC):
     """Interface for document storage and retrieval."""
     
     @abstractmethod
-    def add_documents(
+    async def add_documents(
         self, 
         documents: List[Document], 
         ids: Optional[List[str]] = None, 
@@ -15,22 +15,22 @@ class KnowledgeBaseRepository(ABC):
         pass
 
     @abstractmethod
-    def search_similar(self, query: str, top_k: int = 5) -> List[SearchResult]:
+    async def search_similar(self, query: str, top_k: int = 5) -> List[SearchResult]:
         pass
 
     @abstractmethod
-    def search_keyword(self, query: str, top_k: int = 5) -> List[SearchResult]:
+    async def search_keyword(self, query: str, top_k: int = 5) -> List[SearchResult]:
         pass
 
     @abstractmethod
-    def delete_documents(self, ids: List[str]) -> Dict[str, Any]:
+    async def delete_documents(self, ids: List[str]) -> Dict[str, Any]:
         pass
 
 class RerankerService(ABC):
     """Interface for reranking search results."""
     
     @abstractmethod
-    def rerank(self, query: str, documents: List[SearchResult], top_k: int = 5) -> List[SearchResult]:
+    async def rerank(self, query: str, documents: List[SearchResult], top_k: int = 5) -> List[SearchResult]:
         pass
 
 class LLMAgentService(ABC):

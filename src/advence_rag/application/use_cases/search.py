@@ -19,14 +19,14 @@ class HybridSearchUseCase:
         self.kb_repo = kb_repo
         self.reranker = reranker
 
-    def execute(self, query: str, top_k: int = 5) -> List[SearchResult]:
+    async def execute(self, query: str, top_k: int = 5) -> List[SearchResult]:
         """Execute the hybrid search flow."""
         # 1. Parallel search (for now sequential but can be improved)
         # We fetch more results for the reranker to ensure better final top_k
         fetch_k = top_k * 3
         
-        vector_results = self.kb_repo.search_similar(query, top_k=fetch_k)
-        keyword_results = self.kb_repo.search_keyword(query, top_k=fetch_k)
+        vector_results = await self.kb_repo.search_similar(query, top_k=fetch_k)
+        keyword_results = await self.kb_repo.search_keyword(query, top_k=fetch_k)
         
         # 2. Merge and Deduplicate
         seen_ids = set()
@@ -41,4 +41,4 @@ class HybridSearchUseCase:
             return []
             
         # 3. Rerank
-        return self.reranker.rerank(query, merged, top_k=top_k)
+        return await self.reranker.rerank(query, merged, top_k=top_k)

@@ -26,7 +26,7 @@ class HybridKnowledgeBaseRepository(KnowledgeBaseRepository):
         self._search_k = _search_k
         self._delete = _delete
 
-    def add_documents(
+    async def add_documents(
         self, 
         documents: List[Document], 
         ids: Optional[List[str]] = None, 
@@ -34,10 +34,17 @@ class HybridKnowledgeBaseRepository(KnowledgeBaseRepository):
     ) -> Dict[str, Any]:
         # Convert domain objects to raw lists for existing tool
         doc_contents = [doc.content for doc in documents]
-        return self._add(doc_contents, ids=ids, metadatas=metadatas)
+        
+        # Extract IDs and metadatas from Document objects if not provided
+        if ids is None:
+            ids = [doc.chunk_id for doc in documents]
+        if metadatas is None:
+            metadatas = [doc.metadata for doc in documents]
+            
+        return await self._add(doc_contents, ids=ids, metadatas=metadatas)
 
-    def search_similar(self, query: str, top_k: int = 5) -> List[SearchResult]:
-        res = self._search_v(query, top_k=top_k)
+    async def search_similar(self, query: str, top_k: int = 5) -> List[SearchResult]:
+        res = await self._search_v(query, top_k=top_k)
         if res["status"] != "success":
             return []
         return [
@@ -49,8 +56,8 @@ class HybridKnowledgeBaseRepository(KnowledgeBaseRepository):
             ) for r in res["results"]
         ]
 
-    def search_keyword(self, query: str, top_k: int = 5) -> List[SearchResult]:
-        res = self._search_k(query, top_k=top_k)
+    async def search_keyword(self, query: str, top_k: int = 5) -> List[SearchResult]:
+        res = await self._search_k(query, top_k=top_k)
         if res["status"] != "success":
             return []
         return [
@@ -62,5 +69,5 @@ class HybridKnowledgeBaseRepository(KnowledgeBaseRepository):
             ) for r in res["results"]
         ]
 
-    def delete_documents(self, ids: List[str]) -> Dict[str, Any]:
-        return self._delete(ids)
+    async def delete_documents(self, ids: List[str]) -> Dict[str, Any]:
+        return await self._delete(ids)

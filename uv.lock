@@ -47,6 +47,7 @@ dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pymupdf4llm" },
     { name = "python-dotenv" },
     { name = "python-json-logger" },
     { name = "python-magic" },
@@ -76,8 +77,10 @@ docling = [
 full = [
     { name = "apscheduler" },
     { name = "chromadb" },
+    { name = "docling" },
     { name = "pymupdf4llm" },
     { name = "sentence-transformers" },
+    { name = "unstructured", extra = ["all-docs"] },
 ]
 pymupdf = [
     { name = "pymupdf4llm" },
@@ -101,6 +104,7 @@ requires-dist = [
     { name = "chromadb", marker = "extra == 'full'", specifier = ">=0.4.0" },
     { name = "docling", marker = "extra == 'all-parsers'", specifier = ">=2.0.0" },
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0.0" },
+    { name = "docling", marker = "extra == 'full'", specifier = ">=2.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "google-adk", specifier = ">=0.3.0" },
     { name = "google-genai", specifier = ">=1.0.0" },
@@ -109,6 +113,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pymupdf4llm", specifier = ">=0.2.8" },
     { name = "pymupdf4llm", marker = "extra == 'all-parsers'", specifier = ">=0.0.10" },
     { name = "pymupdf4llm", marker = "extra == 'full'", specifier = ">=0.0.10" },
     { name = "pymupdf4llm", marker = "extra == 'pymupdf'", specifier = ">=0.0.10" },
@@ -123,6 +128,7 @@ requires-dist = [
     { name = "sentence-transformers", marker = "extra == 'full'", specifier = ">=2.2.0" },
     { name = "sentence-transformers", marker = "extra == 'rerank'", specifier = ">=2.2.0" },
     { name = "unstructured", extras = ["all-docs"], marker = "extra == 'all-parsers'" },
+    { name = "unstructured", extras = ["all-docs"], marker = "extra == 'full'" },
     { name = "unstructured", extras = ["all-docs"], marker = "extra == 'unstructured'" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]

@@ -32,7 +32,7 @@ async def ingest_file(
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        result = ingest_use_case.execute(file_path)
+        result = await ingest_use_case.execute(file_path)
         
         if result.get("status") == "success":
             return IngestResponse(

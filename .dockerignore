@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info
+.eggs
+*.manifest
+*.spec
+
+# Virtual environments
+.venv
+venv
+ENV
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.nox
+
+# Build
+build
+dist
+*.egg-info
+
+# Documentation (keep README.md for pyproject.toml)
+docs
+
+# Local data (use volumes instead)
+data/
+.sessions/
+*.db
+*.sqlite
+
+# Environment files (pass via docker-compose)
+.env
+.env.*
+!.env.example
+
+# Development files
+debug_*.py
+try_*.py
+verify_*.py
+repro_*.py
+tests/
+test_data/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
