@@ -93,9 +93,30 @@ async def search_knowledge_base(
         snippet = content
         score = doc.get("rerank_score", doc.get("bm25_score", 0.0))
         
+        # DEBUG: Log document metadata
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"DEBUG DOC [{i}]: keys={list(doc.keys())}, source={doc.get('source')}, metadata={doc.get('metadata')}")
+
+        # Extract source from various possible locations
+        source = doc.get("source")
+        metadata = doc.get("metadata", {}) or {}
+        
+        if not source or source == "unknown":
+            source = metadata.get("source")
+        
+        if not source or source == "unknown":
+            source = metadata.get("file_name")
+            
+        if not source or source == "unknown":
+            source = metadata.get("title")
+
+        if not source:
+            source = "unknown"
+
         doc_info = (
             f"[{i}] Document (Score: {score:.2f})\n"
-            f"   Source: {doc.get('source', 'unknown')}\n"
+            f"   Source: {source}\n"
             f"   Content: {snippet}\n"
         )
         final_results.append(doc)
@@ -185,7 +206,13 @@ search_agent = Agent(
         "   - You must output a detailed summary of what you found.\n"
         "   - Format: '### Search Results for [Query]...'\n"
         "   - Summarize the key content from the retrieved documents.\n"
-        "   - If you found 30 documents, TELL ME what is in them!\n\n"
+        "   - **IMPORTANT**: You MUST list the reference source for each document found.\n"
+        "     Example format:\n"
+        "     - **[1] Title/Source**: Key content summary...\n"
+        "     - **[2] Title/Source**: Key content summary...\n\n"
+        "6. **MANDATORY HANDOFF**: 完成檢索摘要後，你必須明確表示：\n"
+        "   '>>> 檢索完成，請交由 Reviewer 審核資料充分性。'\n"
+        "   這將觸發 orchestrator 將結果傳遞給 reviewer_agent 進行品質審核。\n\n"
         "CRAG 策略：\n"
         "- 評估每個檢索結果的相關性分數\n"
         "- 如果平均分數 < 0.7 或結果數量 < 3，觸發網路搜索\n"

@@ -7,10 +7,8 @@ from google.adk.agents import Agent
 
 from advence_rag.agents.clarification import clarification_agent
 from advence_rag.agents.planner import planner_agent
-from advence_rag.agents.reviewer import reviewer_agent
-from advence_rag.agents.search import search_agent
-from advence_rag.agents.writer import writer_agent
 from advence_rag.config import get_settings
+from advence_rag.workflows.rag_pipeline import rag_pipeline
 
 settings = get_settings()
 
@@ -25,28 +23,21 @@ orchestrator_agent = Agent(
     ),
     instruction=(
         "你是 RAG 系統的總協調者。你的職責是：\n\n"
-        "1. **理解使用者意圖**：分析使用者問題的類型和複雜度\n"
+        "1. **理解使用者意圖**：分析使用者問題的類型\n"
         "2. **路由決策**：\n"
         "   - **語意模糊/缺乏上下文**（如 '它在哪裡？', '價格多少？'）：交給 clarification_agent 提問\n"
-        "   - **簡單問候**（如 hello, hi）：**直接由你自己回應**（例如 'Hello! How can I help you today?'）。**不要呼叫任何子代理**。\n"
-        "   - 簡單問題：直接使用 search_agent 檢索後交給 writer_agent\n"
-        "   - 複雜問題：先用 planner_agent 分解，再執行檢索\n"
-        "3. **流程控制**：\n"
-        "   - 檢索結果必須經過 Reviewer Agent 審核\n"
-        "   - 審核通過後交給 Writer Agent 生成回答\n"
-        "4. **迭代處理**：如果 Reviewer 認為資訊不足，\n"
-        "   協調 Search Agent 進行補充檢索\n\n"
+        "   - **簡單問候**（如 hello, hi）：**直接由你自己回應**。**不要呼叫任何子代理**。\n"
+        "   - **知識問題**：交給 rag_pipeline，它會自動執行 檢索→審核→回答 的完整流程\n"
+        "   - **複雜問題需要分解**：先用 planner_agent 分解，再交給 rag_pipeline\n\n"
         f"**重要限制**：最多進行 {settings.max_agent_iterations} 次代理間轉移。\n\n"
-        "正確範例：\n"
-        "User: Hello -> Orchestrator says 'Hello!' (No sub-agent called)\n"
-        "User: Where is it? -> Orchestrator calls Clarification -> Clarification asks 'What?' -> STOP\n\n"
-        "始終保持對話流暢，並在適當時候總結進度。"
+        "範例：\n"
+        "- User: Hello → 你直接回應\n"
+        "- User: 它在哪裡？ → clarification_agent\n"
+        "- User: 豐收款API是什麼 → rag_pipeline（會自動完成完整流程）"
     ),
     sub_agents=[
         clarification_agent,
         planner_agent,
-        search_agent,
-        reviewer_agent,
-        writer_agent,
+        rag_pipeline,  # 這是 SequentialAgent，會強制執行 search→review→write
     ],
 )

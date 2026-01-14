@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # Processing Settings
     max_reflection_iterations: int = Field(default=3)
     max_agent_iterations: int = Field(default=5, description="Maximum iterations between agents (e.g., writer <-> orchestrator)")
+    
+    # Workflow Settings
+    rag_pipeline_mode: Literal["simple", "full"] = Field(default="simple", description="RAG pipeline mode: simple (Search->Review->Write) or full (Planner->Search->ReviewLoop->Write)")
 
     @property
     def data_dir(self) -> Path:

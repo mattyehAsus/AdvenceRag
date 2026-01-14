@@ -393,13 +393,33 @@ class OrchestratorAgentService(LLMAgentService):
                 for part in event.content.parts:
                     if hasattr(part, 'function_response'):
                         response = part.function_response
-                        tool_name = response.name if hasattr(response, 'name') else "unknown"
+                        # 嘗試多種方式取得工具名稱
+                        tool_name = "unknown"
+                        if hasattr(response, 'name') and response.name:
+                            tool_name = response.name
+                        elif hasattr(response, 'id') and response.id:
+                            tool_name = response.id
+                        
+                        # Debug: 如果仍然 unknown，記錄 response 的屬性以便調查
+                        if tool_name == "unknown":
+                            attrs = [attr for attr in dir(response) if not attr.startswith('_')]
+                            logger.debug(f"Unknown tool_name - response attrs: {attrs}", extra={"session_id": ctx.session_id})
                         
                         # 檢查結果
                         result = response.response if hasattr(response, 'response') else {}
+                        summary = ""
+                        is_error = False
+                        
+                        # Debug: 記錄 result 的類型和內容片段（僅 DEBUG 模式）
+                        if logger.isEnabledFor(logging.DEBUG):
+                            result_type = type(result).__name__
+                            result_preview = str(result)[:100] if result else "empty"
+                            logger.debug(f"Tool result - type: {result_type}, preview: {result_preview}", extra={"session_id": ctx.session_id})
+                        
                         if isinstance(result, dict):
                             status = result.get('status', 'unknown')
                             if status == 'error':
+                                is_error = True
                                 error_msg = result.get('error', 'Unknown error')
                                 ctx.mark_tool_error(tool_name, error_msg)
                                 logger.error("Tool Error", extra={
@@ -408,16 +428,46 @@ class OrchestratorAgentService(LLMAgentService):
                                     "error": error_msg
                                 })
                             else:
-                                summary = ""
+                                # 從 dict 提取摘要
                                 if 'total_found' in result:
                                     summary = f"找到 {result['total_found']} 筆"
                                 elif 'count' in result:
                                     summary = f"{result['count']} 筆結果"
                                 elif 'added_count' in result:
                                     summary = f"新增 {result['added_count']} 筆"
-                                ctx.mark_tool_success(tool_name, summary)
-                                logger.info("Tool Success", extra={
-                                    "session_id": ctx.session_id,
-                                    "tool_name": tool_name,
-                                    "result_summary": summary
-                                })
+                                elif 'results' in result and isinstance(result['results'], list):
+                                    summary = f"{len(result['results'])} 筆結果"
+                                elif 'result' in result and isinstance(result['result'], str):
+                                    # 處理 {'result': '### Search found 10 documents...'} 格式
+                                    import re
+                                    match = re.search(r'found (\d+) documents?', result['result'], re.IGNORECASE)
+                                    if match:
+                                        summary = f"找到 {match.group(1)} 份文件"
+                        elif isinstance(result, str):
+                            # 處理字串結果（如 search_knowledge_base）
+                            # 嘗試從字串中提取文件數量
+                            import re
+                            match = re.search(r'found (\d+) documents?', result, re.IGNORECASE)
+                            if match:
+                                summary = f"找到 {match.group(1)} 份文件"
+                            elif len(result) > 0:
+                                summary = f"回傳 {len(result)} 字元"
+                        
+                        if not is_error:
+                                # 只記錄已知工具的成功，過濾掉 ADK 內部事件
+                                if tool_name != "unknown" and tool_name != "transfer_to_agent":
+                                    # 確保 ctx 有該工具的呼叫記錄（因為 tool_calls 事件可能未觸發）
+                                    # 先檢查是否已有 pending 的記錄，如果沒有就新增
+                                    has_pending = any(
+                                        e.name == tool_name and e.status == "pending" 
+                                        for e in ctx.tool_executions
+                                    )
+                                    if not has_pending:
+                                        ctx.add_tool_call(tool_name)
+                                    
+                                    ctx.mark_tool_success(tool_name, summary)
+                                    logger.info("Tool Success", extra={
+                                        "session_id": ctx.session_id,
+                                        "tool_name": tool_name,
+                                        "result_summary": summary
+                                    })
