@@ -1,8 +1,7 @@
-# ingestion Specification
+# ingestion Specification Delta: CA Alignment
 
-## Purpose
-TBD - created by archiving change initial-onboarding. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Document Parsing Strategy
 系統 **MUST** 偵測輸入文件的檔案格式，自動指派策略解析器，並在解析完成後，**SHALL** 同時更新「向量存儲」與「關鍵字索引」。
 
@@ -17,4 +16,3 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 #### MODIFIED Scenario: Metadata Persistence
 - **WHEN** 文檔被存入「向量存儲」時
 - **THEN** 必須包含來源檔名、頁碼及原始文字片段等追蹤資訊
-

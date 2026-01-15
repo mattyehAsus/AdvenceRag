@@ -26,14 +26,19 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 - **AND** 測試覆蓋率基準 **SHALL** 涵蓋所有 `tools/` 與 `parsers/` 目錄下的邏輯
 
 ### Requirement: Layered Architecture Enforcement
-系統 **MUST** 遵循 Clean Architecture (CA) 分層原則。核心業務邏輯 (Domain & Application) 不得直接依賴於具體的技術實作 (ChromaDB, FastAPI, Gemini API)。
+系統 **MUST** 遵循 Clean Architecture (CA) 分層原則。核心業務邏輯 (Domain & Application) 不得直接依賴於具體的技術實作。
 
-#### ADDED Scenario: Unified Search Logic
-- **GIVEN** 系統需要執行複合式搜尋（混合搜尋、重排序、CRAG 備援）
-- **WHEN** 搜尋請求發出時
-- **THEN** 所有的核心搜尋邏輯必須封裝在 `Application` 層的 Use Case 中
-- **AND** 該 Use Case 必須透過 `Domain` 介面（如 `WebSearchService`）與外部服務交互
-- **AND** `SearchAgent` 必須僅負責調用該 Use Case 並展示結果，不得包含檢索邏輯的具體實作
+#### MODIFIED Scenario: Tech Stack Migration
+- **WHEN** 需要更換基礎設施技術（如更換向量資料庫或 API 框架）
+- **THEN** 僅需在 `Infrastructure` 層進行實作替換
+- **AND** `Application` 層（Use Cases）與 `Domain` 層（Entities/Interfaces）不得受到影響
+
+#### ADDED Requirement: Logic Isolation in Application Layer
+所有的核心業務流程（如搜尋流程、導入流程）**MUST** 封裝在 `Application` 層中。
+
+#### ADDED Scenario: Independent Testing
+- **WHEN** 進行業務邏輯測試時
+- **THEN** 必須能在不依賴 Agent 框架與具體資料庫實作的情況下測試 Use Case
 
 ### Requirement: OpenAPI Compliance
 所有的外部介面端點 **SHALL** 符合 OpenAPI 3.x 規範，並提供自動生成的交互式文檔 (Swagger UI)。

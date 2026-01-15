@@ -4,12 +4,12 @@
 TBD - created by archiving change initial-onboarding. Update Purpose after archive.
 ## Requirements
 ### Requirement: Intelligent Routing
-`orchestrator_agent` 以及 `search_agent` **MUST** 支援 Hybrid Search 邏輯。
+代理人（如 `search_agent`）**MUST** 透過調用專門的 `Application` 層 Use Case 來執行檢索任務，而非自行實現搜尋邏輯。
 
-#### Scenario: Hybrid Search Execution
-- **WHEN** 執行檢索任務時
-- **THEN** 系統必須並發調用 `vector_search` 與 `keyword_search`
-- **AND** 必須使用 Reranker 或 RRF 分數進行結果融合 (Fusion)
+#### MODIFIED Scenario: Hybrid Search Execution
+- **WHEN** 代理人需要執行搜尋時
+- **THEN** 必須調用 `HybridSearchUseCase`（或同等層級的服務）
+- **AND** 使用該 Use Case 提供的統合搜尋能力（含並發檢索與 Fusion）
 
 ### Requirement: Output Hallucination Prevention
 `writer_agent` 的內容生成行為 **SHALL** 嚴格基於檢索小組提供的上下文資訊。
