@@ -6,7 +6,7 @@ from advence_rag.tools.rerank import rerank_results
 class CrossEncoderReranker(RerankerService):
     """Infrastructure implementation of RerankerService using Sentence-Transformers."""
     
-    def rerank(self, query: str, documents: List[SearchResult], top_k: int = 5) -> List[SearchResult]:
+    async def rerank(self, query: str, documents: List[SearchResult], top_k: int = 5) -> List[SearchResult]:
         if not documents:
             return []
             
@@ -19,7 +19,7 @@ class CrossEncoderReranker(RerankerService):
             } for doc in documents
         ]
         
-        res = rerank_results(query, raw_docs, top_k=top_k)
+        res = await rerank_results(query, raw_docs, top_k=top_k)
         
         if res["status"] != "success":
             return documents[:top_k]
@@ -32,3 +32,4 @@ class CrossEncoderReranker(RerankerService):
                 score=r["rerank_score"]
             ) for r in res["results"]
         ]
+

@@ -39,3 +39,11 @@ class LLMAgentService(ABC):
     @abstractmethod
     async def chat(self, messages: List[Dict[str, str]], stream: bool = False) -> Any:
         pass
+
+
+class WebSearchService(ABC):
+    """Interface for web search capabilities (CRAG fallback)."""
+    
+    @abstractmethod
+    async def search(self, query: str, num_results: int = 5) -> List[SearchResult]:
+        pass

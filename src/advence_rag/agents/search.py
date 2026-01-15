@@ -1,6 +1,7 @@
 """Search Agent - 知識檢索執行。
 
 負責執行向量搜索、整合 CRAG 邏輯，當內部知識不足時呼叫 Web Search。
+現在使用 HybridSearchUseCase 進行核心搜尋邏輯。
 """
 
 from typing import Any
@@ -11,118 +12,58 @@ from advence_rag.config import get_settings
 
 settings = get_settings()
 
+# Lazy-loaded use case instance
+_search_use_case = None
+
+
+def _get_search_use_case():
+    """Get or create the HybridSearchUseCase instance (lazy initialization)."""
+    global _search_use_case
+    
+    if _search_use_case is None:
+        from advence_rag.application.use_cases.search import HybridSearchUseCase
+        from advence_rag.infrastructure.persistence.hybrid_repository import HybridKnowledgeBaseRepository
+        from advence_rag.infrastructure.ai.reranker_service import CrossEncoderReranker
+        from advence_rag.infrastructure.ai.web_search_service import SerperWebSearchService
+        
+        kb_repo = HybridKnowledgeBaseRepository()
+        reranker = CrossEncoderReranker()
+        web_search = SerperWebSearchService()
+        
+        _search_use_case = HybridSearchUseCase(
+            kb_repo=kb_repo,
+            reranker=reranker,
+            web_search=web_search,
+        )
+    
+    return _search_use_case
+
 
 async def search_knowledge_base(
     query: str,
     top_k: int | None = None,
     collection_name: str | None = None,
 ) -> str:
-    """從知識庫檢索相關文檔。
+    """從知識庫檢索相關文檔（使用 HybridSearchUseCase）。
     
     Args:
         query: 查詢文字
         top_k: 返回結果數量
-        collection_name: Chroma collection 名稱
+        collection_name: Chroma collection 名稱 (目前未使用)
         
     Returns:
-        dict: 檢索結果
+        str: 格式化的檢索結果，供 LLM 閱讀
     """
     if top_k is None:
         top_k = settings.retrieval_top_k
     
-    from advence_rag.tools.knowledge_base import search_similar, search_keyword
-    from advence_rag.tools.rerank import rerank_results
+    use_case = _get_search_use_case()
     
-    # 1. First Pass: Hybrid Search
-    # 1a. Vector Search
-    vector_results = await search_similar(
-        query=query,
-        top_k=top_k * 3,
-    )
+    # Execute hybrid search with CRAG
+    results = await use_case.execute(query, top_k=top_k)
     
-    # 1b. Keyword Search (BM25)
-    keyword_results = await search_keyword(
-        query=query,
-        top_k=top_k * 3,
-    )
-    
-    # 2. Merge and Deduplicate Results
-    seen_ids = set()
-    merged_results = []
-    
-    # Prioritize keyword results for exact matches if needed, or just combine
-    all_raw_results = []
-    if vector_results["status"] == "success":
-        all_raw_results.extend(vector_results["results"])
-    if keyword_results["status"] == "success":
-        all_raw_results.extend(keyword_results["results"])
-        
-    for res in all_raw_results:
-        res_id = res.get("id")
-        if res_id not in seen_ids:
-            seen_ids.add(res_id)
-            merged_results.append(res)
-    
-    if not merged_results:
-        return {"status": "success", "results": [], "total_found": 0}
-
-    # 3. Second Pass: Cross-Encoder Reranking
-    # The reranker will handle the actual fusion by scoring relevance of query vs content
-    reranked = await rerank_results(
-        query=query,
-        documents=merged_results,
-        top_k=top_k,
-    )
-    
-    # Limit content length for LLM consumption
-    final_results = []
-    
-    # Determine which list to use
-    source_results = reranked["results"] if reranked["status"] == "success" else merged_results[:top_k]
-    
-    # User Request: Reduce number of results, but keep full content.
-    # Limit to top 10 to avoid context overflow with full content.
-    display_limit = 10
-    display_results = source_results[:display_limit]
-    
-    output_lines = [f"### Search found {len(source_results)} documents (Showing top {len(display_results)}):"]
-    
-    for i, doc in enumerate(display_results, 1):
-        content = doc.get("content", "")
-        # Full content enabled (User request)
-        snippet = content
-        score = doc.get("rerank_score", doc.get("bm25_score", 0.0))
-        
-        # DEBUG: Log document metadata
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"DEBUG DOC [{i}]: keys={list(doc.keys())}, source={doc.get('source')}, metadata={doc.get('metadata')}")
-
-        # Extract source from various possible locations
-        source = doc.get("source")
-        metadata = doc.get("metadata", {}) or {}
-        
-        if not source or source == "unknown":
-            source = metadata.get("source")
-        
-        if not source or source == "unknown":
-            source = metadata.get("file_name")
-            
-        if not source or source == "unknown":
-            source = metadata.get("title")
-
-        if not source:
-            source = "unknown"
-
-        doc_info = (
-            f"[{i}] Document (Score: {score:.2f})\n"
-            f"   Source: {source}\n"
-            f"   Content: {snippet}\n"
-        )
-        final_results.append(doc)
-        output_lines.append(doc_info)
-        
-    return "\n".join(output_lines)
+    # Format results for LLM consumption
+    return use_case.format_for_llm(query, results)
 
 
 async def search_web(query: str, num_results: int = 5) -> dict[str, Any]:

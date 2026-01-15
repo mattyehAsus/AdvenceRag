@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     
     # Workflow Settings
     rag_pipeline_mode: Literal["simple", "full"] = Field(default="simple", description="RAG pipeline mode: simple (Search->Review->Write) or full (Planner->Search->ReviewLoop->Write)")
+    crag_enabled: bool = Field(default=True, description="Enable CRAG (Corrective RAG) web fallback when knowledge base results are insufficient")
 
     @property
     def data_dir(self) -> Path:
