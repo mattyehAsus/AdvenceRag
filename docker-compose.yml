@@ -46,7 +46,7 @@ services:
   # Open WebUI - ChatGPT-like interface
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: open-webui
+    container_name: open-webui-docker-compose
     restart: unless-stopped
     ports:
       - "3000:8080"
