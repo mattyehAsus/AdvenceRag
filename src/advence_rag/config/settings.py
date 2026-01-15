@@ -81,6 +81,13 @@ class Settings(BaseSettings):
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    @property
+    def ingest_dir(self) -> Path:
+        """Get the ingestion watch directory."""
+        path = self.data_dir / "ingest"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
 

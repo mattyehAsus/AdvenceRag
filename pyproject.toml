@@ -58,7 +58,22 @@ scheduler = ["apscheduler>=3.10.0"]
 # Reranking
 rerank = ["sentence-transformers>=2.2.0"]
 
-# Full installation
+# Service Splitting
+search = [
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+]
+
+
+ingest = [
+    "chromadb>=0.4.0",
+    "apscheduler>=3.10.0",
+    "docling>=2.0.0",
+    "unstructured[all-docs]",
+    "pymupdf4llm>=0.0.10",
+]
+
+# Legacy/Backward compatibility
 full = [
     "chromadb>=0.4.0",
     "pymupdf4llm>=0.0.10",
@@ -70,10 +85,12 @@ full = [
 
 # Development
 dev = [
+    "advence-rag[full]",
     "pytest>=7.0",
     "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
+    "pre-commit>=3.0.0",
 ]
 
 [project.scripts]

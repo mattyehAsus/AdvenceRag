@@ -64,6 +64,12 @@ def main():
         "--watch",
         help="Directory to watch for new documents",
     )
+    scheduler_parser.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="Scan interval in minutes (default: 5)",
+    )
     
     args = parser.parse_args()
     
@@ -72,22 +78,26 @@ def main():
     logger = setup_logging(settings.log_level)
     
     if args.command == "ingest":
+        import asyncio
         from pathlib import Path
         from advence_rag.parsers import ParserType
         from advence_rag.workflows.optimization import optimization_pipeline
         
-        parser_type = ParserType(args.parser)
-        path = Path(args.path)
+        async def run_ingest():
+            parser_type = ParserType(args.parser)
+            path = Path(args.path)
+            
+            if path.is_file():
+                result = await optimization_pipeline.process_document(path, parser_type)
+            elif path.is_dir():
+                result = await optimization_pipeline.process_directory(path, args.recursive)
+            else:
+                logger.error(f"Path not found: {args.path}")
+                sys.exit(1)
+            
+            print(f"Result: {result}")
         
-        if path.is_file():
-            result = optimization_pipeline.process_document(path, parser_type)
-        elif path.is_dir():
-            result = optimization_pipeline.process_directory(path, args.recursive)
-        else:
-            logger.error(f"Path not found: {args.path}")
-            sys.exit(1)
-        
-        print(f"Result: {result}")
+        asyncio.run(run_ingest())
         
     elif args.command == "serve":
         import subprocess
@@ -98,19 +108,25 @@ def main():
         ])
         
     elif args.command == "scheduler":
+        import asyncio
         from advence_rag.workflows.optimization import optimization_pipeline
         
-        logger.info("Starting background scheduler...")
-        optimization_pipeline.start_scheduler(args.watch)
+        async def run_scheduler():
+            logger.info("Starting background scheduler...")
+            optimization_pipeline.start_scheduler(args.watch, interval=args.interval)
+            
+            # Keep running
+            try:
+                while True:
+                    await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                optimization_pipeline.stop_scheduler()
+                logger.info("Scheduler stopped")
         
-        # Keep running
         try:
-            import time
-            while True:
-                time.sleep(60)
+            asyncio.run(run_scheduler())
         except KeyboardInterrupt:
-            optimization_pipeline.stop_scheduler()
-            logger.info("Scheduler stopped")
+            pass
             
     else:
         parser.print_help()

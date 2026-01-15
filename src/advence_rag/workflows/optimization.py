@@ -5,6 +5,9 @@
 """
 
 import logging
+import shutil
+import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -112,10 +115,24 @@ class OptimizationPipeline:
         supported_exts = {".pdf", ".docx", ".doc", ".pptx", ".html", ".txt", ".md"}
         
         def find_files():
+            processed_dir = dir_path / "processed"
+            error_dir = dir_path / "error"
+            files_to_process = []
+            
             if recursive:
-                return [f for f in dir_path.rglob("*") if f.suffix.lower() in supported_exts]
+                all_files = dir_path.rglob("*")
             else:
-                return [f for f in dir_path.glob("*") if f.suffix.lower() in supported_exts]
+                all_files = dir_path.glob("*")
+                
+            for f in all_files:
+                # 排除已處理和錯誤目錄
+                if processed_dir in f.parents or f == processed_dir:
+                    continue
+                if error_dir in f.parents or f == error_dir:
+                    continue
+                if f.is_file() and f.suffix.lower() in supported_exts:
+                    files_to_process.append(f)
+            return files_to_process
         
         files = await asyncio.to_thread(find_files)
         
@@ -127,29 +144,78 @@ class OptimizationPipeline:
             "details": [],
         }
         
+        if files:
+            # Prepare directories
+            processed_dir = dir_path / "processed"
+            error_dir = dir_path / "error"
+            for d in [processed_dir, error_dir]:
+                if not await asyncio.to_thread(d.exists):
+                    await asyncio.to_thread(d.mkdir, parents=True, exist_ok=True)
+        
         for file in files:
             result = await self.process_document(file)
             results["details"].append(result)
             
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
             if result["status"] == "success":
                 results["processed"] += 1
+                
+                # 搬移至已處理目錄
+                try:
+                    target_path = processed_dir / file.name
+                    
+                    # 處理檔名衝突
+                    if await asyncio.to_thread(target_path.exists):
+                        target_path = processed_dir / f"{file.stem}_{timestamp}{file.suffix}"
+                    
+                    await asyncio.to_thread(shutil.move, str(file), str(target_path))
+                    logger.info(f"Moved processed file to: {target_path}")
+                except Exception as e:
+                    logger.error(f"Failed to move processed file {file}: {e}")
             else:
                 results["failed"] += 1
+                
+                # 搬移至錯誤目錄並產生 Log
+                try:
+                    error_msg = result.get("error", "Unknown error")
+                    target_path = error_dir / file.name
+                    log_path = error_dir / f"{file.name}.log"
+                    
+                    # 處理檔名衝突
+                    if await asyncio.to_thread(target_path.exists):
+                        target_path = error_dir / f"{file.stem}_{timestamp}{file.suffix}"
+                        log_path = error_dir / f"{file.stem}_{timestamp}{file.suffix}.log"
+                    
+                    # 寫入錯誤日誌
+                    def write_log():
+                        with open(log_path, "w", encoding="utf-8") as f:
+                            f.write(f"Error processing file: {file.name}\n")
+                            f.write(f"Time: {datetime.now().isoformat()}\n")
+                            f.write("-" * 20 + "\n")
+                            f.write(f"Error Message:\n{error_msg}\n")
+                    
+                    await asyncio.to_thread(write_log)
+                    await asyncio.to_thread(shutil.move, str(file), str(target_path))
+                    logger.warning(f"Moved FAILED file to: {target_path}. See log: {log_path}")
+                except Exception as e:
+                    logger.error(f"Failed to handle error archiving for {file}: {e}")
         
         return results
     
-    def start_scheduler(self, watch_directory: str | Path | None = None):
+    def start_scheduler(self, watch_directory: str | Path | None = None, interval: int = 5):
         """啟動背景排程器。
         
         Args:
             watch_directory: 要監控的目錄（如提供則定期掃描新檔案）
+            interval: 掃描間隔（分鐘，預設 5 分鐘）
         """
         if not settings.scheduler_enabled:
             logger.info("Scheduler is disabled in settings")
             return
         
         try:
-            from apscheduler.schedulers.background import BackgroundScheduler
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.interval import IntervalTrigger
         except ImportError:
             raise ImportError(
@@ -157,18 +223,20 @@ class OptimizationPipeline:
                 "Install with: pip install apscheduler"
             )
         
-        self._scheduler = BackgroundScheduler(timezone=settings.scheduler_timezone)
+        self._scheduler = AsyncIOScheduler(timezone=settings.scheduler_timezone)
         
         if watch_directory:
-            # 每 5 分鐘掃描一次目錄
+            # 定期掃描目錄
             self._scheduler.add_job(
-                func=lambda: self.process_directory(watch_directory),
-                trigger=IntervalTrigger(minutes=5),
+                func=self.process_directory,
+                args=[watch_directory],
+                trigger=IntervalTrigger(minutes=interval),
                 id="document_ingestion",
                 name="Document Ingestion Job",
                 replace_existing=True,
+                next_run_time=datetime.now(),
             )
-            logger.info(f"Scheduled document ingestion for: {watch_directory}")
+            logger.info(f"Scheduled document ingestion for: {watch_directory} every {interval} minutes")
         
         self._scheduler.start()
         logger.info("Background scheduler started")

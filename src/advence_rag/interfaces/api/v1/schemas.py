@@ -61,4 +61,5 @@ class ModelListResponse(BaseModel):
 class IngestResponse(BaseModel):
     status: str
     added_count: int = 0
+    message: str | None = None
     error: str | None = None

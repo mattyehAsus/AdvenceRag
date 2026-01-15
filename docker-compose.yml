@@ -6,6 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: search
     container_name: advence-rag
     restart: unless-stopped
     ports:
@@ -31,9 +32,10 @@ services:
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      # Persist vector database and sessions
+      # Persist vector database, sessions and shared ingestion queue
       - advence-rag-data:/app/data
       - advence-rag-sessions:/app/.sessions
+      - advence-rag-ingest:/app/data/ingest
     networks:
       - rag-network
     healthcheck:
@@ -42,6 +44,27 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # AdvenceRAG Ingestion Service (Heavyweight)
+  # Background worker that processes files uploaded to /app/data/ingest
+  advence-rag-ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ingest
+    container_name: advence-rag-ingest
+    restart: unless-stopped
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - INGEST_INTERVAL=${INGEST_INTERVAL:-5}
+    command: ["python", "-m", "advence_rag.cli", "scheduler", "--watch", "/app/data/ingest", "--interval", "${INGEST_INTERVAL:-5}"]
+    volumes:
+      - advence-rag-data:/app/data
+      - advence-rag-ingest:/app/data/ingest
+    networks:
+      - rag-network
 
   # Open WebUI - ChatGPT-like interface
   open-webui:
@@ -72,6 +95,8 @@ volumes:
   advence-rag-data:
     driver: local
   advence-rag-sessions:
+    driver: local
+  advence-rag-ingest:
     driver: local
   open-webui-data:
     driver: local
