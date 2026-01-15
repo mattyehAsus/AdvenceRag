@@ -25,6 +25,17 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 - **THEN** 必須通過單元測試 (`unit/`) 與關鍵工具整合測試 (`integration/`)
 - **AND** 測試覆蓋率基準 **SHALL** 涵蓋所有 `tools/` 與 `parsers/` 目錄下的邏輯
 
+### Requirement: Environment-Specific Runtime Targets
+系統 **SHALL** 針對不同用途提供專門的執行環境，以極大化資源效率。
+
+#### Scenario: Lightweight Search Service
+- **WHEN** 構建搜尋專用的 Docker Target 時
+- **THEN** 映像檔必須排除重型文檔解析工具，但保留 Reranking 能力。
+
+#### Scenario: Heavy-Duty Ingestion Service
+- **WHEN** 構建入庫專用的 Docker Target 時
+- **THEN** 映像檔必須包含所有 OCR 與解析引擎，並支援 GPU 加速。
+
 ### Requirement: Layered Architecture Enforcement
 系統 **MUST** 遵循 Clean Architecture (CA) 分層原則。核心業務邏輯 (Domain & Application) 不得直接依賴於具體的技術實作。
 
