@@ -41,6 +41,7 @@ dependencies = [
 [project.optional-dependencies]
 # Vector Store
 chroma = ["chromadb>=0.4.0"]
+qdrant = ["qdrant-client>=1.7.0"]
 
 # Document Parsers - 依情境選用
 docling = ["docling>=2.0.0"]
@@ -61,12 +62,14 @@ rerank = ["sentence-transformers>=2.2.0"]
 # Service Splitting
 search = [
     "chromadb>=0.4.0",
+    "qdrant-client>=1.7.0",
     "sentence-transformers>=2.2.0",
 ]
 
 
 ingest = [
     "chromadb>=0.4.0",
+    "qdrant-client>=1.7.0",
     "apscheduler>=3.10.0",
     "docling>=2.0.0",
     "unstructured[all-docs]",
@@ -76,6 +79,7 @@ ingest = [
 # Legacy/Backward compatibility
 full = [
     "chromadb>=0.4.0",
+    "qdrant-client>=1.7.0",
     "pymupdf4llm>=0.0.10",
     "apscheduler>=3.10.0",
     "sentence-transformers>=2.2.0",

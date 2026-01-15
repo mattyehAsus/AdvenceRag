@@ -41,15 +41,9 @@ TBD - created by archiving change initial-onboarding. Update Purpose after archi
 
 #### MODIFIED Scenario: Tech Stack Migration
 - **WHEN** 需要更換基礎設施技術（如更換向量資料庫或 API 框架）
-- **THEN** 僅需在 `Infrastructure` 層進行實作替換
-- **AND** `Application` 層（Use Cases）與 `Domain` 層（Entities/Interfaces）不得受到影響
-
-#### ADDED Requirement: Logic Isolation in Application Layer
-所有的核心業務流程（如搜尋流程、導入流程）**MUST** 封裝在 `Application` 層中。
-
-#### ADDED Scenario: Independent Testing
-- **WHEN** 進行業務邏輯測試時
-- **THEN** 必須能在不依賴 Agent 框架與具體資料庫實作的情況下測試 Use Case
+- **THEN** 僅需在 `Infrastructure` 層進行實作替換指令
+- **AND** 系統 **SHALL** 支援多種資料庫並存能力的動態切換（如 Chroma 切換至 Qdrant）。
+- **AND** `Application` 層（Use Cases）與 `Domain` 層（Entities/Interfaces）不得受到影響。
 
 ### Requirement: OpenAPI Compliance
 所有的外部介面端點 **SHALL** 符合 OpenAPI 3.x 規範，並提供自動生成的交互式文檔 (Swagger UI)。

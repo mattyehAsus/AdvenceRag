@@ -20,7 +20,9 @@ AdvenceRAG 是一個基於 Clean Architecture 與 SOTA (State-Of-The-Art) 檢索
 
 ### 3. SOTA 混合檢索與重排 (Hybrid Search & Reranking)
 系統不只依賴向量搜尋，而是透過多層過濾確保答案精準度：
-- **Hybrid Search**: 結合了向量語義搜尋 (Semantic Search) 與關鍵字搜尋 (BM25)，解決專有名詞與縮寫的檢索痛點。
+- **Hybrid Search**: 結合了向量語義搜尋 (Semantic Search) 與關鍵字搜尋 (BM25/Full-text)，解決專有名詞與縮寫的檢索痛點。
+- **RRF 分數融合 (Reciprocal Rank Fusion)**: 內建業界標準的 RRF 演算法，將不同來源的檢索結果進行數學上的最優化融合，克服不同評分標準的偏差。
+- **混合資料庫支援 (Multi-DB Architecture)**: 支援動態切換向量資料庫（ChromaDB/Qdrant），並原生整合 Google Gemini `text-embedding-004` 提供工業級的語義向量化能力。
 - **Cross-Encoder Reranking**: 內建 SOTA 重排模型，對原始檢索結果進行二次精確排序，顯著提升最終內容的相關性分數。
 
 ### 3. 高穩定性非同步入庫管道 (Asynchronous ETL Pipeline)
@@ -40,6 +42,6 @@ AdvenceRAG 是一個基於 Clean Architecture 與 SOTA (State-Of-The-Art) 檢索
 
 ## 🏗️ 技術棧摘要 (Technical Stack)
 - **Core**: Python 3.11 / FastAPI
-- **Retrieval**: ChromaDB (Vector) + BM25 (Keyword) + Cross-Encoder (Rerank)
+- **Retrieval**: ChromaDB & Qdrant (Switchable Vector) + Gemini Embeddings + BM25/Full-text + Cross-Encoder (Rerank)
 - **Ingestion**: Docling / Unstructured / PyMuPDF (Multi-Parser)
 - **Ops**: Docker Compose / uv / GPU + CPU Hybrid Deployment

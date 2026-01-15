@@ -47,3 +47,14 @@ class WebSearchService(ABC):
     @abstractmethod
     async def search(self, query: str, num_results: int = 5) -> List[SearchResult]:
         pass
+
+class EmbeddingService(ABC):
+    """Interface for generating text embeddings."""
+    
+    @abstractmethod
+    async def embed_text(self, text: str) -> List[float]:
+        pass
+    
+    @abstractmethod
+    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        pass

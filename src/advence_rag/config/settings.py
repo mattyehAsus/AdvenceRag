@@ -33,11 +33,21 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
 
     # Embedding
-    embedding_model: str = Field(default="models/text-embedding-004")
+    embedding_type: Literal["cloud", "local"] = Field(default="cloud", description="Type of embedding engine to use")
+    embedding_model: str = Field(default="models/text-embedding-004", description="Model name (Gemini model for cloud, HuggingFace path for local)")
+    local_embedding_device: str = Field(default="cpu", description="Device to run local embeddings on (cpu, cuda)")
 
-    # Chroma Vector Database
+    # Vector Database Settings
+    vector_db_type: Literal["chroma", "qdrant"] = Field(default="chroma", description="Type of vector database to use")
+    
+    # Chroma Settings
     chroma_persist_directory: Path = Field(default=Path("./data/chroma"))
     chroma_collection_name: str = Field(default="knowledge_base")
+
+    # Qdrant Settings
+    qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant API URL")
+    qdrant_api_key: Optional[str] = Field(default=None, description="Qdrant API Key")
+    qdrant_collection_name: str = Field(default="knowledge_base")
 
     # Rerank Model
     rerank_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2")

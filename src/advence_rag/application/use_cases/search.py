@@ -18,6 +18,9 @@ settings = get_settings()
 # CRAG Quality Threshold: Cross-Encoder scores > 0 usually indicate relevance
 CRAG_QUALITY_THRESHOLD = 0.0
 
+# RRF Constant: Standard value for Reciprocal Rank Fusion
+RRF_K = 60
+
 
 class HybridSearchUseCase:
     """Use case for performing hybrid search (Vector + BM25), reranking, and optional CRAG fallback."""
@@ -52,19 +55,18 @@ class HybridSearchUseCase:
         crag_enabled = enable_crag if enable_crag is not None else settings.crag_enabled
         
         # 1. Hybrid Search (Vector + BM25)
-        fetch_k = top_k * 3
+        # We fetch more than top_k to have a good pool for RRF and Reranking
+        fetch_k = top_k * 4
         
         vector_results = await self.kb_repo.search_similar(query, top_k=fetch_k)
         keyword_results = await self.kb_repo.search_keyword(query, top_k=fetch_k)
         
-        # 2. Merge and Deduplicate
-        seen_ids = set()
-        merged = []
-        
-        for res in vector_results + keyword_results:
-            if res.id not in seen_ids:
-                seen_ids.add(res.id)
-                merged.append(res)
+        # 2. Merge using Reciprocal Rank Fusion (RRF)
+        # This provides a balanced ranking between vector (semantic) and keyword (exact) results
+        merged = self._reciprocal_rank_fusion(
+            [vector_results, keyword_results], 
+            top_k=fetch_k
+        )
         
         # 3. Rerank
         if merged:
@@ -99,6 +101,40 @@ class HybridSearchUseCase:
         if not results:
             return -999.0
         return results[0].score if results[0].score is not None else -999.0
+
+    def _reciprocal_rank_fusion(
+        self, 
+        ranked_lists: List[List[SearchResult]], 
+        k: int = RRF_K,
+        top_k: int = 10
+    ) -> List[SearchResult]:
+        """Perform Reciprocal Rank Fusion on multiple ranked lists.
+        
+        Formula: score = sum( 1 / (k + rank) )
+        """
+        rrf_scores = {}  # doc_id -> score
+        doc_map = {}     # doc_id -> SearchResult template
+        
+        for ranked_list in ranked_lists:
+            for rank, doc in enumerate(ranked_list, 1):
+                doc_id = doc.id
+                if doc_id not in doc_map:
+                    doc_map[doc_id] = doc
+                    
+                score = 1.0 / (k + rank)
+                rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + score
+        
+        # Sort by RRF score descending
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        
+        results = []
+        for doc_id in sorted_ids[:top_k]:
+            doc = doc_map[doc_id]
+            # Update score to RRF score (though it will be overridden by reranker later)
+            doc.score = rrf_scores[doc_id]
+            results.append(doc)
+            
+        return results
 
     def format_for_llm(self, query: str, results: List[SearchResult]) -> str:
         """Format search results for LLM consumption.

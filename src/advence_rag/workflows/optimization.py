@@ -45,7 +45,8 @@ class OptimizationPipeline:
         path = Path(file_path)
         
         # Local import to avoid initialization issues
-        from advence_rag.tools.knowledge_base import add_documents
+        from advence_rag.infrastructure.persistence.repository_factory import get_repository
+        kb_repo = get_repository()
         
         # 1. 自動偵測最佳解析器 (Metadata access is fine, but detect_best_parser might do IO)
         if parser_type == ParserType.AUTO:
@@ -65,15 +66,8 @@ class OptimizationPipeline:
                 doc.metadata["key_points"] = "" 
                 processed_docs.append(doc)
             
-            # 4. 加入向量資料庫 (Already refactored to async)
-            contents = [doc.content for doc in processed_docs]
-            metadatas = [doc.metadata for doc in processed_docs]
-            ids = [doc.chunk_id for doc in processed_docs]
-            
-            result = await add_documents(
-                documents=contents,
-                metadatas=metadatas,
-                ids=ids,
+            result = await kb_repo.add_documents(
+                documents=processed_docs
             )
             
             return {

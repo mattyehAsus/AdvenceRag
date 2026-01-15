@@ -20,15 +20,17 @@ services:
       - SEARCH_PROVIDER=${SEARCH_PROVIDER:-serper}
       - SERPER_API_KEY=${SERPER_API_KEY:-}
       # Vector Database
+      - VECTOR_DB_TYPE=${VECTOR_DB_TYPE:-chroma}
       - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
       - CHROMA_COLLECTION_NAME=${CHROMA_COLLECTION_NAME:-knowledge_base}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       # LLM Settings
       - LLM_MODEL=${LLM_MODEL:-gemini-2.0-flash}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.7}
-      # Embedding Model
+      # Embedding
+      - EMBEDDING_TYPE=${EMBEDDING_TYPE:-cloud}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-models/text-embedding-004}
-      # Guard Agent
-      - GUARD_ENABLED=${GUARD_ENABLED:-true}
+      - LOCAL_EMBEDDING_DEVICE=cpu # 查詢服務固定用 CPU 或 API
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
@@ -56,15 +58,42 @@ services:
     restart: unless-stopped
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - VECTOR_DB_TYPE=${VECTOR_DB_TYPE:-chroma}
       - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - EMBEDDING_TYPE=${EMBEDDING_TYPE:-cloud}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-models/text-embedding-004}
+      - LOCAL_EMBEDDING_DEVICE=cuda # 入庫服務強迫使用 CUDA
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - INGEST_INTERVAL=${INGEST_INTERVAL:-5}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     command: ["python", "-m", "advence_rag.cli", "scheduler", "--watch", "/app/data/ingest", "--interval", "${INGEST_INTERVAL:-5}"]
     volumes:
       - advence-rag-data:/app/data
       - advence-rag-ingest:/app/data/ingest
     networks:
       - rag-network
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - rag-network
+    # Only start if specifically requested (or if you want it always on)
+    # profiles: ["qdrant"] 
 
   # Open WebUI - ChatGPT-like interface
   open-webui:
@@ -99,6 +128,8 @@ volumes:
   advence-rag-ingest:
     driver: local
   open-webui-data:
+    driver: local
+  qdrant-data:
     driver: local
 
 networks:
