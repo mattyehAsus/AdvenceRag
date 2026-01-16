@@ -181,7 +181,7 @@ class QdrantKnowledgeBaseRepository(KnowledgeBaseRepository):
         hits = await asyncio.to_thread(
             self.client.search,
             collection_name=self.collection_name,
-            query_vector=[0.0] * 768, # Dummy vector for purely payload-based search
+            query_vector=[0.0] * (await self._get_dimension()), # Dynamic dimension for dummy vector
             query_filter=models.Filter(
                 must=[
                     models.FieldCondition(

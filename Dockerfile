@@ -37,7 +37,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv /opt/venv && \
-    VIRTUAL_ENV=/opt/venv uv pip install ".[ingest,rerank]"
+    VIRTUAL_ENV=/opt/venv uv pip install --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cu121 ".[ingest,rerank]"
 
 # --------------------------------
 # Stage 3: Search Runtime

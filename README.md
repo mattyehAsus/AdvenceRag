@@ -10,17 +10,19 @@
 ## 架構特色 (Architecture)
 
 採用 **FastAPI** 結合 **Clean Architecture**，確保系統的高擴展性與可維護性。
+同時具備 **Service Splitting** 能力，將單一應用拆分為輕量級搜尋服務與重型入庫服務。
 
 - **Domain Layer**: 定義 Agent 核心行為與介面，不綁定具體技術。
-- **Application Layer**: 實作複雜的使用案例 (如 CRAG 檢索流程)。
-- **Infrastructure Layer**: 實作具體工具 (ChromaDB, Google Search)。
-- **Interface Layer**: 標準化 RESTful API (/v1/chat/completions)。
+- **Application Layer**: 實作複雜的使用案例 (如 RRF 檢索、非同步入庫)。
+- **Infrastructure Layer**: 實作具體工具 (ChromaDB, Qdrant, Gemini/Local Embeddings)。
+- **Interface Layer**: 標準化 RESTful API (/v1/chat/completions) 與 Ingest Endpoints。
 
 ### Agent Teams
-- **Orchestrator Agent**: 智慧路由與對話協調
-- **Guard Agent**: 敏感資料過濾
-- **Retrieval Team**: 問題分解 → 檢索 (Hybrid Search + Rerank)
-- **Processing Team**: 反思驗證 → 回答生成
+- **Orchestrator Agent**: 智慧路由與對話協調 (具備 Ambiguity Detection)
+- **Guard Agent**: 敏感資料過濾與安全檢查
+- **Search Agent**: CRAG 檢索專家 (支援 RRF 融合與 Web Search 備援)
+- **Reviewer Agent**: 反思驗證團隊 (迭代審核資料充分性)
+- **Writer Agent**: 回答生成專家 (遵循 Grounded Generation 原則)
 
 ## 快速開始
 
@@ -46,13 +48,26 @@ cp .env.example .env
 
 ### 執行
 
+#### 推薦：Docker Compose (生產/完整模式)
 ```bash
-# 啟動 ADK 開發伺服器
+# 一鍵啟動 (含 Qdrant, Search Service, Ingest Worker)
+docker compose up --build
+```
+
+#### 開發模式
+```bash
+# 啟動 ADK 視覺化開發 UI
 adk web src/advence_rag
 
-# 或使用 CLI
-advence-rag --help
+# 或使用 CLI 啟動入庫掃描器
+advence-rag scheduler --watch ./data/ingest
 ```
+
+## 🔧 進階配置
+詳細配置請參考：**[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)**
+- **多資料庫**: 切換 `VECTOR_DB_TYPE=qdrant` 或 `chroma`。
+- **向量引擎**: 切換 `EMBEDDING_TYPE=cloud` (Gemini) 或 `local` (CPU/GPU)。
+- **硬體調度**: 搜尋用 CPU，入庫用 GPU (詳見 Docker 配置)。
 
 ## 專案結構
 

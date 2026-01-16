@@ -6,7 +6,7 @@ Advence RAG 是一個基於 Google ADK (Agent Development Kit) 的多代理 (Mul
 ## Tech Stack
 - **語言**: Python 3.11+ (使用 `uv` 管理)
 - **核心框架**: Google ADK, Google GenAI
-- **向量資料庫**: ChromaDB
+- **向量資料庫**: ChromaDB / Qdrant (支援混合檢索)
 - **文檔解析**: Docling, PyMuPDF4LLM, Unstructured (Strategy Pattern)
 - **資料驗證**: Pydantic v2
 - **排程**: APScheduler
@@ -52,3 +52,4 @@ Advence RAG 是一個基於 Google ADK (Agent Development Kit) 的多代理 (Mul
 ## External Dependencies
 - Google AI (Gemini) API
 - ChromaDB (Local or Server)
+- Qdrant (Local or Docker)

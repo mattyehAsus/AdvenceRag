@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from advence_rag.domain.interfaces import KnowledgeBaseRepository
+from advence_rag.domain.interfaces import KnowledgeBaseRepository, EmbeddingService
 from advence_rag.config import get_settings
 
 logger = logging.getLogger(__name__)

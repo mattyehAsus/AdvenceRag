@@ -55,6 +55,7 @@ services:
       dockerfile: Dockerfile
       target: ingest
     container_name: advence-rag-ingest
+    runtime: nvidia
     restart: unless-stopped
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}

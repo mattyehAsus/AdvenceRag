@@ -8,7 +8,7 @@ from google.adk.agents import Agent
 from advence_rag.agents.clarification import clarification_agent
 from advence_rag.agents.planner import planner_agent
 from advence_rag.config import get_settings
-from advence_rag.workflows.rag_pipeline import rag_pipeline
+from advence_rag.workflows.rag_pipeline import get_rag_pipeline
 
 settings = get_settings()
 
@@ -38,6 +38,6 @@ orchestrator_agent = Agent(
     sub_agents=[
         clarification_agent,
         planner_agent,
-        rag_pipeline,  # 這是 SequentialAgent，會強制執行 search→review→write
+        get_rag_pipeline(),  # 動態獲取 SequentialAgent，避免循環導入
     ],
 )
